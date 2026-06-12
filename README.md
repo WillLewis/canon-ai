@@ -51,8 +51,32 @@ python -m canon ingest fixtures/greyharbor/*.fountain --world greyharbor --reset
 python -m pytest -q            # or: python tests/test_fountain.py
 ```
 
-Next steps in the pipeline (not yet built): `extract` (LLM → assertions), entity
-resolution + confirm queue, `ask`, `check`.
+## Extraction (implemented — Phase 0, step 2 of the pipeline)
+
+The `extract` step (`docs/extraction.md` Stage 2) runs one structured-output Claude
+call per scene (rolling synopsis for context) → candidate assertions JSON using the
+closed predicate vocabulary, each with a verbatim `supporting_quote`. Assertions
+whose quote can't be found in the scene are dropped (citations are the trust
+mechanism). Entity resolution and the confidence gate are later steps — candidates
+still name subjects/objects as written and are not yet loaded into Postgres.
+
+```bash
+# Preview the exact prompts — no API key, no dependencies:
+python -m canon extract fixtures/greyharbor/*.fountain --world greyharbor --dry-run
+
+# Run extraction (needs anthropic + a no-training/ZDR API key):
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=...    # must belong to a no-training / zero-data-retention org
+python -m canon extract fixtures/greyharbor/*.fountain --world greyharbor \
+  --out build/greyharbor.candidates.json
+#   --model (default claude-opus-4-8) · --effort · --limit N · --no-verify-quotes
+```
+
+Model note: `temperature` is intentionally not sent (removed on Opus 4.7/4.8);
+determinism comes from prompting + conservative extraction + `effort`.
+
+Next steps in the pipeline (not yet built): entity resolution + confirm queue
+(Stage 3–4), load resolved assertions into Postgres, `ask`, `check`.
 
 ## The one rule
 

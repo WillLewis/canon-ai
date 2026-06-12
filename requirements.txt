@@ -1,6 +1,14 @@
-# Runtime deps for the ingestion loader. The Fountain parser itself is stdlib-only
-# (run `python -m canon ingest ... --dry-run` with nothing installed).
+# Runtime deps. The Fountain parser is stdlib-only — `python -m canon ingest ...
+# --dry-run` and `python -m canon extract ... --dry-run` both run with nothing
+# installed (the prompts/scenes are assembled offline).
+
+# Ingestion loader (canon ingest):
 psycopg[binary]>=3.1
+
+# LLM extraction (canon extract). Use a recent release — needs structured outputs
+# (output_config.format), the effort parameter, and adaptive thinking. The API key
+# must belong to a no-training / zero-data-retention org (see CLAUDE.md).
+anthropic>=0.69
 
 # Dev/test:
 #   pytest>=7
