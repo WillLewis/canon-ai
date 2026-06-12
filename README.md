@@ -28,6 +28,7 @@ canon ingest fixtures/greyharbor/*.fountain --world greyharbor
 canon confirm --world greyharbor        # review low-confidence assertions
 canon ask "what does Cole know about the ledger, and when?" --world greyharbor
 canon check --world greyharbor          # should find P1–P4 from the answer key
+python eval/run_eval.py --assertions out/assertions.json --findings out/findings.json # Phase 0 gates: PASS/FAIL (try --demo now)
 ```
 
 ## Ingestion (implemented — Phase 0, step 1 of the pipeline)
