@@ -7,5 +7,22 @@ dist/
 .venv/
 venv/
 .env
+.env.*
 .pytest_cache/
 .DS_Store
+
+# rights hygiene — script containers and scratch output never commit.
+# Original .fountain fixtures are the only screenplay files allowed in git;
+# scripts/rights_guard.py (pre-commit + CI) enforces the same rules.
+out/
+*.fdx
+*.fdr
+*.pdf
+*.doc
+*.docx
+*.rtf
+*.celtx
+*.highland
+*.fadein
+*.fountain
+!fixtures/**/*.fountain

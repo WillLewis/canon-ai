@@ -1,0 +1,4 @@
+#!/bin/sh
+# Rights-hygiene guard — activate once per clone with:
+#   git config core.hooksPath scripts/hooks
+exec python3 "$(git rev-parse --show-toplevel)/scripts/rights_guard.py" --staged

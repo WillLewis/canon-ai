@@ -106,6 +106,24 @@ python eval/run_eval.py --assertions out/assertions.json --findings out/findings
 Next steps in the pipeline (not yet built): load entities/aliases/assertions into
 Postgres (the "store" step), then `check` (findings.json) and `ask`.
 
+## Rights guard
+
+This is a public repo and Canon's standing rule is **only rights-clean, original
+material, ever** — so the rule is enforced mechanically, not just by policy.
+`scripts/rights_guard.py` blocks screenplay containers (.fdx/.pdf/.docx/…)
+everywhere, `.fountain` files outside `fixtures/`, screenplay-formatted text in
+any non-fixture file, fixtures missing their originality credit line, and API
+keys. CI (`.github/workflows/rights-guard.yml`) runs it on the working tree
+*and the full git history* on every push. Activate the local pre-commit hook
+once per clone:
+
+```bash
+git config core.hooksPath scripts/hooks
+```
+
+Real scripts you're testing against locally belong in ignored scratch dirs
+(`out/`, `build/`) — they can never be committed.
+
 ## The one rule
 
 If a proposed feature generates story content, it's out of scope. Forever. See `docs/decisions.md` D1.

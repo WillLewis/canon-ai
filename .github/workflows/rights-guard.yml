@@ -1,0 +1,15 @@
+name: rights-guard
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rights-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # --history scans every commit
+      - name: Block non-original script text (tree + full history)
+        run: python3 scripts/rights_guard.py --tree --history
