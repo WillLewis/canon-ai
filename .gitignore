@@ -11,6 +11,9 @@ venv/
 .pytest_cache/
 .DS_Store
 
+# Internal planning doc — kept local, not published to GitHub.
+PLAN.md
+
 # rights hygiene — script containers and scratch output never commit.
 # Original .fountain fixtures are the only screenplay files allowed in git;
 # scripts/rights_guard.py (pre-commit + CI) enforces the same rules.
