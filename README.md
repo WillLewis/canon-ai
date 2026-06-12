@@ -76,8 +76,35 @@ python -m canon extract fixtures/greyharbor/*.fountain --world greyharbor \
 Model note: `temperature` is intentionally not sent (removed on Opus 4.7/4.8);
 determinism comes from prompting + conservative extraction + `effort`.
 
-Next steps in the pipeline (not yet built): entity resolution + confirm queue
-(Stage 3–4), load resolved assertions into Postgres, `ask`, `check`.
+## Entity resolution (implemented — Phase 0, step 3 of the pipeline)
+
+The `resolve` step (`docs/extraction.md` Stage 3) turns candidate names into
+canonical entities: **exact → fuzzy → LLM disambiguation**. Unresolvable
+subjects/objects become `provisional` entities flagged for the confirm queue;
+merging two entities is human-only and logged with provenance. Output is the
+eval I/O contract (`{"assertions": [...]}` with canonical names) plus a resolution
+state file (entities + aliases + queue + merge log) for the later Postgres load.
+
+```bash
+# Deterministic only (no API key) — queues role-refs/initials for confirmation:
+python -m canon resolve build/greyharbor.candidates.json --no-llm \
+  --state build/greyharbor.resolve.json --out out/assertions.json
+
+# With the LLM disambiguation pass (maps "the deputy"/"C.B." → Cole, etc.):
+python -m canon resolve build/greyharbor.candidates.json \
+  --state build/greyharbor.resolve.json --out out/assertions.json
+
+# Review the confirm queue, or merge by hand (human-only collision policy):
+python -m canon confirm --state build/greyharbor.resolve.json --out out/assertions.json
+python -m canon merge   --state build/greyharbor.resolve.json --keep Cole --drop "the deputy" \
+  --reason "deputy is Cole" --out out/assertions.json
+
+# Score the resolved assertions against ground truth (PLAN.md step 6):
+python eval/run_eval.py --assertions out/assertions.json --findings out/findings.json
+```
+
+Next steps in the pipeline (not yet built): load entities/aliases/assertions into
+Postgres (the "store" step), then `check` (findings.json) and `ask`.
 
 ## The one rule
 
