@@ -4,6 +4,49 @@
 
 Verification, not generation: ingest scripts and world docs → temporal assertion graph in Postgres → ask questions and run continuity checks, every answer and flag cited to its source scene.
 
+## Where ChatGPT & Claude fall short for serialized fiction
+
+Long context solves *"what do my documents say?"*
+Canon solves *"what is true, when, on which branch, who knows it — and prove it."*
+
+### 1. State, not recall
+
+Ask an LLM with your full bible loaded: *"Does Dani know about the affair?"*
+It read the Ep 311 reveal, so it says **yes**.
+
+But you're writing Ep 309 — where Dani only suspects the letters.
+
+A context window retrieves everything that's *written*. It has no concept of
+what's true *as of a point in the timeline*, on *this draft*, from *this
+character's* point of view. Canon models knowledge as timestamped, branch-aware
+assertions — so "what did Dani know in 309?" is a query, not a guess.
+
+### 2. Proactive, not reactive
+
+Chat answers the questions you think to ask.
+The continuity errors that ship are the ones you didn't.
+
+Nobody asks *"hey, did we burn down the boathouse?"* before setting a scene
+there. Canon's scan flags it in your draft — *boathouse destroyed in 307, sc 31* —
+before the table read, not after the episode airs.
+
+### 3. Verifiable, not vibes
+
+A confident wrong answer is worse than no answer — it gets written into the
+script. LLM recall is probabilistic; Canon flags are deterministic queries
+against the graph, and **every flag cites canon**: episode, scene, line.
+Click through. Check it yourself. Nothing auto-changes your draft.
+
+### 4. Branches and a write path, not a folder of PDFs
+
+A show isn't one corpus. It's aired canon + the current draft + three alternate
+outlines + *"what if we move the reveal to 308?"* Canon branches like git:
+diverge, query each timeline independently, merge what survives the room.
+
+And it's a write path, not just a reading surface — flags resolve into the
+graph, room notes become episode packets, beats export to FDX. A chat project
+is where your bible goes to be asked about. Canon is where it stays true.
+
 ## Status
 
 Pre-code handoff. Phase 0 (see `PLAN.md`) builds the spike: `ingest → extract → store → ask/check` CLI, graded against `fixtures/greyharbor`.
