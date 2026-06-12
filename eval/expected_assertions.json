@@ -1,0 +1,63 @@
+{
+  "_comment": "Machine-readable ground truth for fixtures/greyharbor. Human-readable rationale lives in fixtures/greyharbor/answer-key.md. Matching rules in eval/run_eval.py.",
+  "expected_assertions": [
+    {"id": "A1",  "subject": "Mara Voss",      "predicate": "cannot",     "object_value": "drive"},
+    {"id": "A2",  "subject": "Tobias Voss",    "predicate": "dies",       "object_value": null},
+    {"id": "A3",  "subject": "Leather Ledger", "predicate": "located_at", "object_entity": "Chapel on the Point"},
+    {"id": "A4",  "subject": "Tobias Voss",    "predicate": "knows",      "object_value": "ledger location"},
+    {"id": "A5",  "subject": "Edda Quinn",     "predicate": "knows",      "object_value": "two sets of numbers"},
+    {"id": "A6",  "subject": "Edda Quinn",     "predicate": "believes",   "object_value": "real ledger not in office"},
+    {"id": "A7",  "subject": "Chapel on the Point", "predicate": "destroyed", "object_value": null},
+    {"id": "A8",  "subject": "Mara Voss",      "predicate": "promised",   "object_value": "find Danny"},
+    {"id": "A9",  "subject": "Mara Voss",      "predicate": "knows",      "object_value": "ledger location"},
+    {"id": "A10", "subject": "Cole Brannigan", "predicate": "knows",      "object_value": "ledger location"},
+    {"id": "A11", "subject": "Mara Voss",      "predicate": "possesses",  "object_entity": "Leather Ledger"},
+    {"id": "A12", "subject": "Mara Voss",      "predicate": "knows",      "object_value": "C.B. payment"},
+    {"id": "A13", "subject": "Cole Brannigan", "predicate": "occupation", "object_value": "deputy"},
+    {"id": "A14", "subject": "Tobias Voss",    "predicate": "occupation", "object_value": "harbormaster"},
+    {"id": "A15", "subject": "Edda Quinn",     "predicate": "occupation", "object_value": "harbor cook"}
+  ],
+  "alias_map": {
+    "mara": "Mara Voss", "mara voss": "Mara Voss",
+    "tobias": "Tobias Voss", "tobias voss": "Tobias Voss", "uncle": "Tobias Voss",
+    "edda": "Edda Quinn", "edda quinn": "Edda Quinn",
+    "cole": "Cole Brannigan", "cole brannigan": "Cole Brannigan", "deputy": "Cole Brannigan", "c.b.": "Cole Brannigan",
+    "danny": "Danny Voss", "danny voss": "Danny Voss", "brother": "Danny Voss",
+    "chapel": "Chapel on the Point", "chapel on the point": "Chapel on the Point", "old chapel": "Chapel on the Point",
+    "ledger": "Leather Ledger", "leather ledger": "Leather Ledger", "thursday numbers": "Leather Ledger", "real ledger": "Leather Ledger",
+    "harbormaster's office": "Harbormaster's Office", "office": "Harbormaster's Office",
+    "docks": "Greyharbor Docks", "greyharbor docks": "Greyharbor Docks",
+    "danny-lee": "Danny-Lee", "skiff": "Danny-Lee"
+  },
+  "object_value_synonyms": {
+    "drive": ["drive", "driving", "drive a truck", "operate a vehicle"],
+    "ledger location": ["ledger location", "where the ledger is", "ledger under the chapel floor stone", "ledger hidden in chapel", "hiding place of the ledger", "where tobias hid the ledger"],
+    "two sets of numbers": ["two sets of numbers", "tobias keeps two ledgers", "two ledgers", "keeps two sets of books"],
+    "real ledger not in office": ["real ledger not in office", "the real one's not in that office", "real ledger is elsewhere"],
+    "find danny": ["find danny", "find her brother", "find him", "i'll find you danny"],
+    "c.b. payment": ["c.b. payment", "cole's payment in ledger", "c.b. four hundred", "cole's name in the book", "deputy in the ledger"],
+    "deputy": ["deputy"],
+    "harbormaster": ["harbormaster"],
+    "harbor cook": ["harbor cook", "cook"]
+  },
+  "expected_findings": [
+    {"id": "P1", "check": "dead_speaker",            "severity": "critical", "must_mention": ["Tobias"]},
+    {"id": "P2", "check": "premature_knowledge",     "severity": "critical", "must_mention": ["Cole"]},
+    {"id": "P3", "check": "destroyed_location_use",  "severity": "critical", "must_mention": ["Chapel"]},
+    {"id": "P4", "check": "capability_violation",    "severity": "warning",  "must_mention": ["Mara", "drive"]}
+  ],
+  "expected_notes": [
+    {"id": "N1", "check": "idle_setup",         "must_mention": ["Danny"]},
+    {"id": "N2", "check": "dangling_reference", "must_mention": ["Danny"]}
+  ],
+  "trap_findings_must_not_flag": [
+    {"id": "T1", "description": "Mara echoing 'Forgive me the arithmetic' must not produce a premature_knowledge finding mentioning both Mara and arithmetic", "check": "premature_knowledge", "must_not_mention_all": ["Mara", "arithmetic"]},
+    {"id": "T2", "description": "Edda's E101 claims are believes, not knows; no finding should treat them as world-fact violations", "check": "*", "must_not_mention_all": ["Edda", "office"]}
+  ],
+  "thresholds": {
+    "extraction_recall_min": 0.80,
+    "planted_findings_recall_min": 1.0,
+    "false_positives_per_episode_max": 2,
+    "episode_count": 2
+  }
+}

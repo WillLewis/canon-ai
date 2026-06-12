@@ -1,0 +1,18 @@
+{
+  "_comment": "Mock pipeline output: deliberately imperfect (misses A6, A15; sloppy aliasing) so --demo shows a realistic mid-tuning report. Replace with real out/assertions.json.",
+  "assertions": [
+    {"subject": "MARA", "predicate": "cannot", "object_value": "drive a truck", "scene": "E101/sc1", "confidence": 0.95},
+    {"subject": "Tobias", "predicate": "dies", "object_value": null, "scene": "E101/sc5", "confidence": 0.99},
+    {"subject": "ledger", "predicate": "located_at", "object_entity": "chapel", "scene": "E101/sc3", "confidence": 0.92},
+    {"subject": "Tobias", "predicate": "knows", "object_value": "where Tobias hid the ledger", "scene": "E101/sc3", "confidence": 0.9},
+    {"subject": "Edda", "predicate": "knows", "object_value": "keeps two sets of books", "scene": "E101/sc2", "confidence": 0.88},
+    {"subject": "chapel", "predicate": "destroyed", "object_value": null, "scene": "E101/sc6", "confidence": 0.97},
+    {"subject": "Mara", "predicate": "promised", "object_value": "find Danny", "scene": "E101/sc4", "confidence": 0.93},
+    {"subject": "Mara", "predicate": "knows", "object_value": "ledger under the chapel floor stone", "scene": "E102/sc1", "confidence": 0.9},
+    {"subject": "deputy", "predicate": "knows", "object_value": "hiding place of the ledger", "scene": "E102/sc1", "confidence": 0.91},
+    {"subject": "Mara", "predicate": "possesses", "object_entity": "leather ledger", "scene": "E102/sc2", "confidence": 0.94},
+    {"subject": "Mara", "predicate": "knows", "object_value": "C.B. four hundred", "scene": "E102/sc5", "confidence": 0.9},
+    {"subject": "Cole", "predicate": "occupation", "object_value": "deputy", "scene": "E102/sc1", "confidence": 0.96},
+    {"subject": "Tobias", "predicate": "occupation", "object_value": "harbormaster", "scene": "E101/sc1", "confidence": 0.95}
+  ]
+}

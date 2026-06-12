@@ -1,0 +1,11 @@
+{
+  "_comment": "Mock checker output: finds P1, P2, P3 + notes, misses P4, includes one false positive. Replace with real out/findings.json.",
+  "findings": [
+    {"check": "dead_speaker", "severity": "critical", "explanation": "Tobias appears in scene INT. HARBORMASTER'S OFFICE - DAY (pos 9) but died at pos 6.", "sealed": false},
+    {"check": "premature_knowledge", "severity": "critical", "explanation": "Cole appears to use \"ledger under the chapel floor stone\" at pos 7, but canon has no earlier source for him learning it.", "sealed": false},
+    {"check": "destroyed_location_use", "severity": "critical", "explanation": "Scene INT. CHAPEL ON THE POINT - DAY (pos 8) uses Chapel on the Point, destroyed at pos 6.", "sealed": false},
+    {"check": "idle_setup", "severity": "note", "explanation": "Open thread: Mara — \"find Danny\" set up at pos 4, untouched since.", "sealed": false},
+    {"check": "dangling_reference", "severity": "note", "explanation": "\"Danny Voss\" is referenced (scene pos 4) but never established in canon.", "sealed": false},
+    {"check": "presence_conflict", "severity": "critical", "explanation": "Edda is at Greyharbor Docks during [2,3) and also at Edda's Shack during [2,12) — intervals overlap.", "sealed": false}
+  ]
+}
