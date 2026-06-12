@@ -62,6 +62,9 @@ YOUR SQL MUST:
 7. Temporal phrasing: "when did X begin/learn" = lower(valid_during);
    "true at position P" = valid_during @> P; "still open" = upper_inf(valid_during).
 8. ORDER BY story position when the question implies sequence. LIMIT {MAX_ROWS}.
+9. object_value holds short free-text handles — match them BROADLY (single-keyword
+   ILIKE like '%ledger%', or a few ORed keywords), never an exact phrase. An
+   over-narrow filter that returns 0 rows reads as "canon has no answer".
 """
 
 ASK_SYSTEM_PROMPT = (

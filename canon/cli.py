@@ -29,7 +29,11 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     if missing:
         print(f"error: file(s) not found: {', '.join(missing)}", file=sys.stderr)
         return 2
-    works = ingest_mod.parse_works(files)
+    try:
+        works = ingest_mod.parse_works(files)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
 
     db_url = ingest_mod.resolve_db_url(args.db_url)
     if args.dry_run or db_url is None:
@@ -74,7 +78,11 @@ def cmd_extract(args: argparse.Namespace) -> int:
     if missing:
         print(f"error: file(s) not found: {', '.join(missing)}", file=sys.stderr)
         return 2
-    works = ingest_mod.parse_works(files)
+    try:
+        works = ingest_mod.parse_works(files)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
 
     if args.dry_run or not extract_mod.has_credentials():
         if not extract_mod.has_credentials() and not args.dry_run:

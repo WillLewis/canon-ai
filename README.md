@@ -76,10 +76,15 @@ python eval/run_eval.py --assertions out/assertions.json --findings out/findings
 
 ## Ingestion (implemented — Phase 0, step 1 of the pipeline)
 
-The `ingest` step (`docs/extraction.md` Stage 1 "Segment") is built: Fountain → scenes
-with `slug`, global `story_position`, `is_flashback`, and planted-annotation-free
-`raw_text`, loaded into `worlds`/`works`/`scenes`. The Fountain parser is stdlib-only;
-only the Postgres loader needs a dependency.
+The `ingest` step (`docs/extraction.md` Stage 1 "Segment") is built: **Fountain,
+PDF, and docx** → scenes with `slug`, global `story_position`, `is_flashback`, and
+planted-annotation-free `raw_text`, loaded into `worlds`/`works`/`scenes`. Formats
+mix freely in one world (`ep101.fountain` + `ep102.pdf`). The Fountain parser is
+stdlib-only; PDF/docx use `pypdf`/`python-docx` (text-based scripts only — the LLM
+re-segmentation fallback for scanned/messy PDFs is deliberately not built yet, per
+SPEC's time-box; such files fail with a clear error). PDF/docx test fixtures are
+generated at test time in temp dirs from our own `.fountain` files — screenplay
+containers are never committed (rights guard).
 
 ```bash
 # Preview segmentation — no database, no dependencies:
@@ -225,8 +230,17 @@ The 10 scripted Phase 0 questions live in `tests/test_ask.py` with reference SQL
 the DB-gated integration test answers 10/10 with correct citations (the harness
 bar — the R5 acceptance "≥8/10 via the LLM" gets measured once a key is present).
 
-**That completes the Phase 0 pipeline:** `ingest → extract → resolve/confirm →
-store → check → ask`, graded by `eval/run_eval.py` (ALL PASS on the golden graph).
+**Phase 0 pipeline complete and measured on real LLM extraction** (`claude-opus-4-8`,
+2026-06-12): `ingest → extract → resolve → store → check → ask`, graded by
+`eval/run_eval.py` — **ALL GATES PASS**: extraction recall 80% (12/15), planted
+errors 4/4 (incl. `premature_knowledge` via canonical-handle reuse and
+`capability_violation` via the negated-`cannot` arm), 0 false positives, no trap
+flags. Ask-the-Bible: 8/10 questions answered with correct citations; the 2
+misses were one honest "canon doesn't establish it" refusal over an extraction
+gap (never a hallucinated answer) and one query-too-narrow variance since
+mitigated in the prompt. Tuning lesson encoded in `docs/extraction.md`'s spirit:
+free-text `object_value` must be SHORT CANONICAL HANDLES reused verbatim across
+scenes — that's what makes cross-character knowledge checks joinable.
 
 ## Rights guard
 

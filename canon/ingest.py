@@ -24,12 +24,16 @@ DB_URL_ENV_VARS = ("CANON_DB_URL", "DATABASE_URL")
 SUPABASE_LOCAL_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
 
+SCRIPT_EXTS = (".fountain", ".pdf", ".docx")
+
+
 def expand_inputs(paths: list[str]) -> list[str]:
     """Expand a mix of files and directories into an ordered, de-duped file list."""
     files: list[str] = []
     for p in paths:
         if os.path.isdir(p):
-            files.extend(sorted(glob.glob(os.path.join(p, "*.fountain"))))
+            for ext in SCRIPT_EXTS:
+                files.extend(sorted(glob.glob(os.path.join(p, f"*{ext}"))))
         else:
             files.append(p)
     seen: set[str] = set()
@@ -41,9 +45,24 @@ def expand_inputs(paths: list[str]) -> list[str]:
     return out
 
 
+def parse_one(path: str) -> ParsedWork:
+    """Dispatch by container: Fountain natively; PDF/docx via canon.script_doc."""
+    ext = Path(path).suffix.lower()
+    if ext == ".fountain":
+        return parse_fountain(Path(path).read_text(encoding="utf-8"), source_file=path)
+    if ext == ".pdf":
+        from . import script_doc
+        return script_doc.parse_pdf(path)
+    if ext == ".docx":
+        from . import script_doc
+        return script_doc.parse_docx(path)
+    raise RuntimeError(
+        f"unsupported script format '{ext}' ({path}) — supported: {', '.join(SCRIPT_EXTS)}"
+    )
+
+
 def parse_works(files: list[str]) -> list[ParsedWork]:
-    works = [parse_fountain(Path(f).read_text(encoding="utf-8"), source_file=f) for f in files]
-    return order_works(works)
+    return order_works([parse_one(f) for f in files])
 
 
 def order_works(works: list[ParsedWork]) -> list[ParsedWork]:

@@ -64,10 +64,20 @@ Use `fact` with a free-text object_value for anything true and citable that no o
 EVIDENCE:
 - Every assertion MUST include `supporting_quote`: text copied VERBATIM from the current scene (exact words). If you cannot quote it from THIS scene, do not emit the assertion.
 - Extract only what the text states or directly implies. No inference chains ("she seems upset, so..."). Inference is a later layer's job, not yours.
+- Direct implication INCLUDES: acting on information (going straight to a hidden thing's location implies `knows` it), titles and signage ("DEPUTY COLE", working the desk of the harbormaster's office) implying `occupation`, and an object being placed/found somewhere implying `located_at(object, place)`.
+
+OBJECT VALUES ARE CANONICAL HANDLES (load-bearing for cross-scene checks):
+- `object_value` is a SHORT lowercase handle (2–5 words), never a sentence: "ledger location", "two sets of numbers", "drive", "find Danny". Manner, detail, and nuance go in `notes`.
+- THE SAME FACT GETS THE SAME HANDLE EVERYWHERE: before inventing a handle, scan PRIOR SCENES for the same fact and COPY its object_value character-for-character — across scenes AND across characters (if Tobias `knows "ledger location"`, Cole learning it is also `knows "ledger location"`).
+- `dies` / `destroyed`: leave ALL object fields null; put the manner in `notes`.
 
 KNOWLEDGE & BELIEF (this distinction is load-bearing):
-- A character asserting something in dialogue establishes `believes(speaker, X)` — NOT a world-fact and NOT `knows`. Characters lie, guess, and are wrong. Also record it as a world-fact only if the scene corroborates it in action lines or via multiple independent sources.
-- "suspects" / "thinks" / "guesses" != `knows`. Use `believes` with the suspected content. Use `knows` only when the text establishes the character actually has the knowledge.
+- `knows`: first-hand — the character did it, saw it, read it, was told it on-screen, or acts on it. Hiding something yourself means you `knows` its location; reading a ledger entry means you `knows` its contents; stating a specific fact from your own observation ("I've seen where he goes") is `knows`.
+- `believes`: secondhand, suspicion, inference, or an unverifiable claim. "suspects" / "thinks" / "guesses" != `knows`.
+- A character's dialogue claim about the WORLD is `believes(speaker, X)` — NOT a world-fact (characters lie). Record the world-fact too only if action lines or independent sources corroborate it. But note: a flat first-person factual statement of something the speaker has direct access to still earns `knows(speaker, ...)` — the epistemic fact, not the world-fact.
+
+CAPABILITY VIOLATIONS:
+- If PRIOR SCENES establish `cannot(X, handle)` and X now performs that very action, emit `cannot(X, same handle)` with `polarity: false` quoting the action line (this records "X is doing the thing canon says X cannot do").
 
 POLARITY & NEGATION:
 - `polarity: true` = the assertion holds. Use `polarity: false` for an explicit negation of a relational predicate (e.g. "he is not a member").

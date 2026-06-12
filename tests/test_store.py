@@ -227,6 +227,38 @@ def test_reset_tears_down_world_graph_first():
     assert any("from entities" in d for d in deletes)
 
 
+def test_located_at_movement_closes_previous_open_interval():
+    state = _state()
+    state["assertions"] = [
+        _assn("Mara", "located_at", 1, object_entity="Chapel on the Point"),
+        _assn("Mara", "located_at", 3, object_entity="Chapel on the Point"),  # moves (same loc ok)
+        _assn("Mara", "located_at", 8, object_entity="Chapel on the Point"),
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    r = store.store_state(conn, "greyharbor", state)
+    updates = [c for c in conn.cur.calls if c[0].startswith("UPDATE assertions")]
+    # each later location closed the previous open interval at its position
+    assert [(u[1][0], u[1][1]) for u in updates] == [(1, 3), (3, 8)]
+    cl_updates = [c for c in conn.cur.calls if c[0].startswith("UPDATE character_locations")]
+    assert [(u[1][0], u[1][1]) for u in cl_updates] == [(1, 3), (3, 8)]
+    assert r["character_locations"] == 3
+
+
+def test_located_at_same_position_conflict_skips_sync_not_load():
+    state = _state()
+    state["assertions"] = [
+        _assn("Mara", "located_at", 3, object_entity="Chapel on the Point"),
+        _assn("Mara", "located_at", 3, object_entity="Chapel on the Point"),  # two places at pos 3
+        _assn("Mara", "located_at", 8, object_entity="Chapel on the Point"),  # later move
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    r = store.store_state(conn, "greyharbor", state)
+    assert r["assertions"] == 3                 # all loaded — scan check flags the conflict
+    assert r["character_locations"] == 2        # conflicting row not synced
+    updates = [c for c in conn.cur.calls if c[0].startswith("UPDATE assertions")]
+    assert [(u[1][0], u[1][1]) for u in updates] == [(3, 8)]  # first row closed by the pos-8 move
+
+
 def test_skips_assertion_with_unknown_subject():
     state = _state()
     state["assertions"].append(_assn("Ghost", "knows", 3, object_value="x"))

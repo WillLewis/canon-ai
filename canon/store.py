@@ -168,6 +168,14 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
             add_presence(sid, db_id.get(ent.local_id))
 
     # --- assertions (+ character_locations sync) ---
+    # Scene-by-scene extraction emits located_at with open-ended intervals; a
+    # subject moving to a new place CLOSES their previous open interval at the
+    # new position ([1,) + move at 2 -> [1,2) + [2,)). Without this, successive
+    # locations overlap and the exclusion constraint rejects ordinary movement.
+    # A same-position pair (two places at once) is left open deliberately: the
+    # character_locations sync is skipped for it and the presence_conflict scan
+    # reports it as a finding instead of aborting the load.
+    open_located: dict = {}  # subject_db_id -> (assertion_db_id, lower_bound)
     n_assertions = n_char_loc = n_skipped = 0
     for a in state.assertions:
         subj = by_norm.get(resolve._norm(a.get("subject")))
@@ -184,6 +192,27 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
         confidence = max(0.0, min(1.0, float(a.get("confidence") or 0.0)))
         status = status_for(a.get("confidence"), a.get("confirmed_by_human", False), conf_canon)
 
+        sync_ok = True
+        if predicate == "located_at" and lower is not None:
+            prev = open_located.get(subj[0])
+            if prev is not None:
+                prev_aid, prev_lower = prev
+                if lower > prev_lower:
+                    # close the previous open interval at the new position
+                    cur.execute(
+                        "UPDATE assertions SET valid_during = int4range(%s, %s) WHERE id = %s",
+                        (prev_lower, lower, prev_aid),
+                    )
+                    cur.execute(
+                        "UPDATE character_locations SET valid_during = int4range(%s, %s) "
+                        "WHERE assertion_id = %s",
+                        (prev_lower, lower, prev_aid),
+                    )
+                else:
+                    # two places at the same position: genuine conflict — leave the
+                    # scan check to flag it; don't fight the exclusion constraint
+                    sync_ok = False
+
         cur.execute(
             "INSERT INTO assertions "
             "(world_id, subject_id, predicate, object_id, object_value, polarity, "
@@ -195,7 +224,12 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
         aid = cur.fetchone()[0]
         n_assertions += 1
 
-        if (predicate == "located_at" and subj[1] == "character"
+        if predicate == "located_at" and lower is not None and upper is None and sync_ok:
+            # conflicting (sync_ok=False) rows are not tracked: the previously
+            # synced interval must stay the one the next movement closes
+            open_located[subj[0]] = (aid, lower)
+
+        if (predicate == "located_at" and sync_ok and subj[1] == "character"
                 and obj is not None and obj[1] == "location"):
             cur.execute(
                 "INSERT INTO character_locations "

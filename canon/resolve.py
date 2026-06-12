@@ -483,8 +483,18 @@ def resolve_candidates(candidates, *, world: str = "", client=None, model: str =
                              for m in si.occurrences[:6]],
             ))
 
-    assertions = _build_resolved_assertions(candidates, surface_to_entity)
     presence = _build_scene_presence(candidates, surface_to_entity)
+
+    # A character who is referenced but never present in any scene is not yet
+    # established in canon (the answer-key's own definition of provisional —
+    # e.g. Danny: talked about, never appears). Feeds the dangling_reference
+    # check. Marked before assertions are built so their flags snapshot it.
+    present_norms = {_norm(n) for p in presence for n in p["entities"]}
+    for e in reg.entities:
+        if e.kind == "character" and _norm(e.name) not in present_norms:
+            e.provisional = True
+
+    assertions = _build_resolved_assertions(candidates, surface_to_entity)
     return ResolutionState(world, reg, assertions, presence, queue)
 
 

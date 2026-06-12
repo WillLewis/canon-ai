@@ -5,6 +5,10 @@
 # Ingestion loader (canon ingest):
 psycopg[binary]>=3.1
 
+# PDF / docx script containers (canon ingest; Fountain needs neither):
+pypdf>=4
+python-docx>=1
+
 # LLM extraction (canon extract). Use a recent release — needs structured outputs
 # (output_config.format), the effort parameter, and adaptive thinking. The API key
 # must belong to a no-training / zero-data-retention org (see CLAUDE.md).

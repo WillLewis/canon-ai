@@ -82,12 +82,15 @@ where k.world_id = :world_id
   and k.object_value is not null
   and k.status not in ('rejected','retconned')
   -- not the originator: this fact was first known strictly earlier by someone
+  -- (object_value comparison is normalized: lowercase, alphanumerics only —
+  --  extraction reuses canonical handles, this absorbs residual punct/case drift)
   and lower(k.valid_during) > (
     select min(lower(k0.valid_during))
     from assertions k0
     where k0.world_id = k.world_id
       and k0.predicate = 'knows'
-      and k0.object_value = k.object_value
+      and regexp_replace(lower(k0.object_value), '[^a-z0-9 ]', '', 'g')
+        = regexp_replace(lower(k.object_value),  '[^a-z0-9 ]', '', 'g')
       and k0.status not in ('rejected','retconned')
   )
   -- and never co-present with an existing knower at or before learning it
@@ -100,7 +103,8 @@ where k.world_id = :world_id
     where sp_self.entity_id = k.subject_id
       and sc.story_position <= lower(k.valid_during)
       and k2.predicate = 'knows'
-      and k2.object_value = k.object_value
+      and regexp_replace(lower(k2.object_value), '[^a-z0-9 ]', '', 'g')
+        = regexp_replace(lower(k.object_value),  '[^a-z0-9 ]', '', 'g')
       and k2.subject_id <> k.subject_id
       and k2.status not in ('rejected','retconned')
       and k2.valid_during @> sc.story_position
@@ -131,9 +135,11 @@ where d.world_id = :world_id
 
 -- ============================================================
 -- CHECK 5 · capability_violation (warning)
--- A character does something canon says they cannot do
--- ('cannot' assertions, e.g. Maya cannot drive), proxied by a
--- conflicting positive assertion during the cannot-interval.
+-- A character does something canon says they cannot do. Two arms:
+--   A) a positive assertion whose (normalized) object_value contains the
+--      capability handle, during the cannot-interval;
+--   B) an explicit contradiction: cannot(X, v, polarity=false) — "X is doing
+--      the thing" — overlapping cannot(X, v, polarity=true).
 -- ============================================================
 select
   'capability_violation',
@@ -145,8 +151,17 @@ select
 from assertions c
 join assertions p
   on  p.subject_id = c.subject_id
-  and p.object_value = c.object_value
-  and p.polarity and p.id <> c.id
+  and p.id <> c.id
+  and (
+        ( p.polarity
+          and p.predicate <> 'cannot'
+          and position(regexp_replace(lower(c.object_value), '[^a-z0-9 ]', '', 'g')
+                       in regexp_replace(lower(p.object_value), '[^a-z0-9 ]', '', 'g')) > 0 )
+     or ( p.predicate = 'cannot'
+          and not p.polarity
+          and regexp_replace(lower(p.object_value), '[^a-z0-9 ]', '', 'g')
+            = regexp_replace(lower(c.object_value), '[^a-z0-9 ]', '', 'g') )
+  )
 join scenes s   on s.id = p.established_in_scene
 join entities e on e.id = c.subject_id
 where c.world_id = :world_id
@@ -167,11 +182,18 @@ select
          e.name, s.story_position),
   a.established_in_scene,
   a.id, null::bigint
-from assertions a
-join scenes s on s.id = a.established_in_scene
-join entities e on e.id in (a.subject_id, a.object_id) and e.provisional
-where a.world_id = :world_id
-  and a.status not in ('rejected','retconned');
+from (
+  -- one note per provisional entity: cite its first reference
+  select e2.id as eid, min(a2.id) as first_aid
+  from assertions a2
+  join entities e2 on e2.id in (a2.subject_id, a2.object_id) and e2.provisional
+  where a2.world_id = :world_id
+    and a2.status not in ('rejected','retconned')
+  group by e2.id
+) firsts
+join assertions a on a.id = firsts.first_aid
+join entities e   on e.id = firsts.eid
+join scenes s     on s.id = a.established_in_scene;
 
 -- ============================================================
 -- CHECK 7 · idle_setup (note) — setup/payoff tracker, v0 form
@@ -199,4 +221,14 @@ where a.world_id = :world_id
       and later.object_value = a.object_value
       and later.id <> a.id
       and ls.story_position > asrc.story_position
+  )
+  -- one note per (subject, thread): promised+goal of the same handle dedupe
+  and a.id = (
+    select min(a3.id) from assertions a3
+    where a3.subject_id = a.subject_id
+      and a3.predicate in ('promised','goal','secret_of')
+      and upper_inf(a3.valid_during)
+      and a3.status not in ('rejected','retconned')
+      and regexp_replace(lower(a3.object_value), '[^a-z0-9 ]', '', 'g')
+        = regexp_replace(lower(a.object_value),  '[^a-z0-9 ]', '', 'g')
   );

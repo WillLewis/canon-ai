@@ -228,6 +228,21 @@ def test_merge_is_reflected_in_assertions_and_logged():
     assert not any(q.surface.lower() == "the deputy" for q in state.queue)  # stale item pruned
 
 
+def test_never_present_character_becomes_provisional():
+    state = resolve.resolve_candidates(_candidates(), client=None)
+    # Danny is referenced (promised 'find Danny') but never in scene_presence...
+    cands = _candidates()
+    cands["scenes"][3]["assertions"].append(
+        _a("Mara", "sibling_of", object_entity="Danny"))
+    state = resolve.resolve_candidates(cands, client=None)
+    danny = state.registry.by_name("Danny")
+    assert danny is not None and danny.provisional is True
+    # ...while characters who do appear stay non-provisional
+    assert state.registry.by_name("Mara").provisional is False
+    a = next(x for x in state.assertions if x["predicate"] == "sibling_of")
+    assert a["object_provisional"] is True
+
+
 def test_state_round_trips_through_json():
     state = resolve.resolve_candidates(_candidates(), client=FakeResolveClient())
     d = resolve.state_to_dict(state)
