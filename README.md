@@ -103,8 +103,31 @@ python -m canon merge   --state build/greyharbor.resolve.json --keep Cole --drop
 python eval/run_eval.py --assertions out/assertions.json --findings out/findings.json
 ```
 
-Next steps in the pipeline (not yet built): load entities/aliases/assertions into
-Postgres (the "store" step), then `check` (findings.json) and `ask`.
+## Store / load (implemented — Phase 0, step 4 of the pipeline)
+
+The `store` step loads a resolution state into Postgres (per `db/schema.sql`),
+after `canon ingest` has created the world's scenes. It writes
+`entities`/`aliases`/`scene_presence`/`assertions`/`character_locations`, and
+handles the transforms the schema needs: `valid_during` ranges from
+`story_position` + `starts_here`/`ends_here`; an object-value placeholder for
+intransitive predicates (`dies`/`destroyed`) so the schema's object CHECK holds;
+`scene_presence` populated with both the scene's characters **and** its setting
+location (resolved from the slug, so `destroyed_location_use` can see it); and the
+`character_locations` exclusion-constraint mirror for `located_at(character →
+location)`. v0 status gate: `confidence ≥ --conf-canon` (0.85) loads as `canon`,
+else `draft`.
+
+```bash
+# Summarize what would load — no database:
+python -m canon store --state build/greyharbor.resolve.json --world greyharbor --dry-run
+
+# Load into Postgres (after ingest has loaded the scenes):
+export CANON_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+python -m canon store --state build/greyharbor.resolve.json --world greyharbor --reset
+```
+
+Next steps in the pipeline (not yet built): `check` (run `db/checks.sql` →
+findings.json, so the eval's findings gates can go green) and `ask`.
 
 ## Rights guard
 

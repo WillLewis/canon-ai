@@ -1,0 +1,233 @@
+"""Store / load — resolved assertions + entities into Postgres (db/schema.sql).
+
+The pipeline's `... --> Postgres` arrow. Consumes a resolution state file (from
+`canon resolve`) and loads, for a world whose scenes already exist (from
+`canon ingest`):
+
+  entities, aliases, scene_presence, assertions, character_locations
+
+Key transforms done here (not in earlier stages):
+  - valid_during: story_position + starts_here/ends_here -> int4range. Default
+    [P, ) (open-ended from this scene); ends_here -> [P, P+1); backdated
+    (starts_here false) -> open lower bound (NULL,) per docs/extraction.md.
+  - object synthesis: db/schema.sql requires every assertion to have an object;
+    intransitive predicates (dies/destroyed/alive) carry none, so we synthesize
+    object_value = predicate to satisfy the CHECK (value is irrelevant to checks).
+  - scene_presence: the extraction lists CHARACTERS; the destroyed_location_use
+    check also needs the scene's setting LOCATION present, so we resolve each
+    scene's slug to a location entity and add it.
+  - character_locations: mirror located_at(character -> location) assertions into
+    the typed table whose exclusion constraint enforces one-place-per-interval.
+
+status (v0 gate): confidence >= conf_canon (default 0.85) -> 'canon', else
+'draft', so the check layer has a populated canon graph. extraction.md's stricter
+draft -> human-confirm -> canon promotion is a later refinement.
+
+Driver-agnostic (psycopg2/psycopg3 cursor subset) and fake-connection testable;
+not run against a live database in this environment (run after `supabase start`).
+"""
+
+from __future__ import annotations
+
+import re
+
+from . import resolve
+
+CONF_CANON = 0.85
+INTRANSITIVE = resolve.INTRANSITIVE if hasattr(resolve, "INTRANSITIVE") else frozenset(
+    {"alive", "dies", "destroyed"}
+)
+
+_SLUG_PREFIX_RE = re.compile(r"^\s*(INT\.?/EXT\.?|EXT\.?/INT\.?|INT|EXT|EST|I/E|E/I)[.\s]+", re.I)
+_SLUG_TIME_SEPS = (" - ", " — ", " – ")
+
+
+# ---------------------------------------------------------------------------
+# Pure transforms
+# ---------------------------------------------------------------------------
+
+def valid_range(story_position: int, starts_here: bool, ends_here: bool) -> tuple:
+    """(lower, upper) for an int4range '[lower, upper)'. None = unbounded."""
+    lower = story_position if starts_here else None
+    upper = (story_position + 1) if ends_here else None
+    return lower, upper
+
+
+def synth_object_value(predicate: str, object_id, object_value):
+    """Satisfy schema's object CHECK: intransitive predicates get a placeholder."""
+    if object_id is not None or (object_value not in (None, "")):
+        return object_value
+    return predicate  # dies/destroyed/alive -> object_value = predicate
+
+
+def status_for(confidence, confirmed: bool, conf_canon: float = CONF_CANON) -> str:
+    if confirmed:
+        return "canon"
+    try:
+        return "canon" if float(confidence) >= conf_canon else "draft"
+    except (TypeError, ValueError):
+        return "draft"
+
+
+def slug_location(slug: str) -> str:
+    """'INT. CHAPEL ON THE POINT - DAY' -> 'CHAPEL ON THE POINT'."""
+    s = _SLUG_PREFIX_RE.sub("", slug or "").strip()
+    for sep in _SLUG_TIME_SEPS:
+        if sep in s:
+            s = s.split(sep)[0]
+    return s.strip()
+
+
+# ---------------------------------------------------------------------------
+# Loader
+# ---------------------------------------------------------------------------
+
+def _delete_world_graph(cur, world_id: int) -> None:
+    """FK-safe teardown of a world's resolved graph (keeps worlds/works/scenes)."""
+    cur.execute("DELETE FROM findings WHERE world_id = %s", (world_id,))
+    cur.execute("DELETE FROM assertions WHERE world_id = %s", (world_id,))  # cascades character_locations
+    cur.execute(
+        "DELETE FROM scene_presence WHERE scene_id IN "
+        "(SELECT s.id FROM scenes s JOIN works w ON w.id = s.work_id WHERE w.world_id = %s)",
+        (world_id,),
+    )
+    cur.execute("DELETE FROM entities WHERE world_id = %s", (world_id,))  # cascades aliases
+
+
+def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
+                conf_canon: float = CONF_CANON) -> dict:
+    state = resolve.state_from_dict(state_dict)
+    reg = state.registry
+    cur = conn.cursor()
+
+    cur.execute("SELECT id FROM worlds WHERE name = %s", (world_name,))
+    row = cur.fetchone()
+    if not row:
+        raise RuntimeError(f"world '{world_name}' not found — run `canon ingest` first.")
+    world_id = row[0]
+
+    cur.execute(
+        "SELECT s.id, s.story_position, s.slug FROM scenes s "
+        "JOIN works w ON w.id = s.work_id WHERE w.world_id = %s",
+        (world_id,),
+    )
+    scene_rows = cur.fetchall()
+    if not scene_rows:
+        raise RuntimeError(f"world '{world_name}' has no scenes — run `canon ingest` first.")
+    scene_id_by_pos = {pos: sid for sid, pos, _slug in scene_rows}
+
+    if reset:
+        _delete_world_graph(cur, world_id)
+
+    # --- entities + aliases ---
+    db_id: dict[int, int] = {}              # local_id -> db id
+    by_norm: dict[str, tuple] = {}          # norm(name|alias) -> (db id, kind)
+    n_aliases = 0
+    for e in reg.entities:
+        cur.execute(
+            "INSERT INTO entities (world_id, kind, name, dossier, provisional) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (world_id, e.kind, e.name, e.dossier, e.provisional),
+        )
+        eid = cur.fetchone()[0]
+        db_id[e.local_id] = eid
+        by_norm[resolve._norm(e.name)] = (eid, e.kind)
+        for alias, kind in e.aliases:
+            by_norm.setdefault(resolve._norm(alias), (eid, e.kind))
+            cur.execute(
+                "INSERT INTO aliases (entity_id, alias, kind) VALUES (%s, %s, %s)",
+                (eid, alias, kind),
+            )
+            n_aliases += 1
+
+    # --- scene_presence: characters (from extraction) + setting location (slug) ---
+    seen_presence: set[tuple] = set()
+    n_presence = 0
+
+    def add_presence(scene_id, entity_id):
+        nonlocal n_presence
+        key = (scene_id, entity_id)
+        if scene_id and entity_id and key not in seen_presence:
+            seen_presence.add(key)
+            cur.execute(
+                "INSERT INTO scene_presence (scene_id, entity_id) VALUES (%s, %s)",
+                (scene_id, entity_id),
+            )
+            n_presence += 1
+
+    for p in state.scene_presence:
+        sid = scene_id_by_pos.get(p.get("story_position"))
+        for name in p.get("entities") or []:
+            hit = by_norm.get(resolve._norm(name))
+            if hit:
+                add_presence(sid, hit[0])
+
+    for sid, pos, slug in scene_rows:
+        status, ent = reg.match(slug_location(slug))
+        if status in ("exact", "fuzzy") and ent is not None and ent.kind == "location":
+            add_presence(sid, db_id.get(ent.local_id))
+
+    # --- assertions (+ character_locations sync) ---
+    n_assertions = n_char_loc = n_skipped = 0
+    for a in state.assertions:
+        subj = by_norm.get(resolve._norm(a.get("subject")))
+        scene_id = scene_id_by_pos.get(a.get("story_position"))
+        if subj is None or scene_id is None:
+            n_skipped += 1
+            continue
+        obj = by_norm.get(resolve._norm(a["object_entity"])) if a.get("object_entity") else None
+        obj_id = obj[0] if obj else None
+        predicate = a.get("predicate")
+        object_value = synth_object_value(predicate, obj_id, a.get("object_value"))
+        lower, upper = valid_range(a.get("story_position"), a.get("starts_here", True),
+                                   a.get("ends_here", False))
+        confidence = max(0.0, min(1.0, float(a.get("confidence") or 0.0)))
+        status = status_for(a.get("confidence"), a.get("confirmed_by_human", False), conf_canon)
+
+        cur.execute(
+            "INSERT INTO assertions "
+            "(world_id, subject_id, predicate, object_id, object_value, polarity, "
+            " valid_during, established_in_scene, supporting_quote, confidence, status) "
+            "VALUES (%s, %s, %s, %s, %s, %s, int4range(%s, %s), %s, %s, %s, %s) RETURNING id",
+            (world_id, subj[0], predicate, obj_id, object_value, bool(a.get("polarity", True)),
+             lower, upper, scene_id, a.get("supporting_quote"), confidence, status),
+        )
+        aid = cur.fetchone()[0]
+        n_assertions += 1
+
+        if (predicate == "located_at" and subj[1] == "character"
+                and obj is not None and obj[1] == "location"):
+            cur.execute(
+                "INSERT INTO character_locations "
+                "(assertion_id, character_id, location_id, valid_during) "
+                "VALUES (%s, %s, %s, int4range(%s, %s))",
+                (aid, subj[0], obj_id, lower, upper),
+            )
+            n_char_loc += 1
+
+    conn.commit()
+    return {
+        "world_id": world_id, "entities": len(reg.entities), "aliases": n_aliases,
+        "scene_presence": n_presence, "assertions": n_assertions,
+        "character_locations": n_char_loc, "skipped": n_skipped,
+    }
+
+
+def render_dry_run(state_dict: dict, world_name: str, conf_canon: float = CONF_CANON) -> str:
+    """Offline summary of what would load (scene linkage/locations resolved live)."""
+    state = resolve.state_from_dict(state_dict)
+    n_prov = sum(1 for e in state.registry.entities if e.provisional)
+    canon = sum(1 for a in state.assertions
+                if status_for(a.get("confidence"), a.get("confirmed_by_human", False), conf_canon) == "canon")
+    n_alias = sum(len(e.aliases) for e in state.registry.entities)
+    char_presence = sum(len(p.get("entities") or []) for p in state.scene_presence)
+    return "\n".join([
+        f"world: {world_name}   (load requires its scenes from `canon ingest`)",
+        f"entities: {len(state.registry.entities)} ({n_prov} provisional)  + {n_alias} alias(es)",
+        f"assertions: {len(state.assertions)}  ({canon} canon / {len(state.assertions) - canon} draft "
+        f"at conf>={conf_canon})",
+        f"scene_presence (characters): {char_presence}  "
+        f"(+ setting-location presence resolved against the scenes table at load)",
+        "",
+        "no database writes (dry run).",
+    ])

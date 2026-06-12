@@ -15,6 +15,7 @@ from pathlib import Path
 from . import extract as extract_mod
 from . import ingest as ingest_mod
 from . import resolve as resolve_mod
+from . import store as store_mod
 
 
 def cmd_ingest(args: argparse.Namespace) -> int:
@@ -235,6 +236,50 @@ def _write_state_inplace(state, args) -> None:
         print(f"wrote {args.out}: {len(state.assertions)} resolved assertion(s)")
 
 
+def cmd_store(args: argparse.Namespace) -> int:
+    try:
+        state_dict = json.loads(Path(args.state).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        print(f"error: state file not found: {args.state}", file=sys.stderr)
+        return 2
+
+    db_url = ingest_mod.resolve_db_url(args.db_url)
+    if args.dry_run or db_url is None:
+        if db_url is None and not args.dry_run:
+            print(
+                "note: no database URL set (CANON_DB_URL / DATABASE_URL / --db-url); "
+                "showing a dry run.\n",
+                file=sys.stderr,
+            )
+        print(store_mod.render_dry_run(state_dict, args.world, args.conf_canon))
+        return 0
+
+    try:
+        conn = ingest_mod.connect(db_url)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    try:
+        r = store_mod.store_state(conn, args.world, state_dict,
+                                  reset=args.reset, conf_canon=args.conf_canon)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    print(
+        f"loaded into world '{args.world}' (id={r['world_id']}): "
+        f"{r['entities']} entities, {r['aliases']} aliases, {r['assertions']} assertions, "
+        f"{r['scene_presence']} scene-presence rows, {r['character_locations']} character-locations"
+        + (f"  ({r['skipped']} assertion(s) skipped — unknown subject/scene)" if r["skipped"] else "")
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="canon", description="Canon AI CLI")
     sub = p.add_subparsers(dest="command", required=True)
@@ -308,6 +353,20 @@ def build_parser() -> argparse.ArgumentParser:
     mrg.add_argument("--reason", default="manual merge", help="provenance note")
     mrg.add_argument("--out", default=None, help="also re-export eval-contract assertions here")
     mrg.set_defaults(func=cmd_merge)
+
+    sto = sub.add_parser(
+        "store", help="load resolved entities + assertions into Postgres (after `canon ingest`)",
+    )
+    sto.add_argument("--state", required=True, help="resolution state JSON (from `canon resolve`)")
+    sto.add_argument("--world", required=True, help="world name (its scenes must already be ingested)")
+    sto.add_argument("--db-url", default=None,
+                     help="Postgres URL (else CANON_DB_URL / DATABASE_URL)")
+    sto.add_argument("--reset", action="store_true",
+                     help="clear this world's entities/assertions/scene_presence before loading")
+    sto.add_argument("--conf-canon", type=float, default=store_mod.CONF_CANON,
+                     help="confidence at/above which an assertion loads as 'canon' (else 'draft')")
+    sto.add_argument("--dry-run", action="store_true", help="summarize; no database writes")
+    sto.set_defaults(func=cmd_store)
     return p
 
 
