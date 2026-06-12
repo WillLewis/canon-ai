@@ -1,0 +1,6 @@
+# Runtime deps for the ingestion loader. The Fountain parser itself is stdlib-only
+# (run `python -m canon ingest ... --dry-run` with nothing installed).
+psycopg[binary]>=3.1
+
+# Dev/test:
+#   pytest>=7

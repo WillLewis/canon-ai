@@ -30,6 +30,30 @@ canon ask "what does Cole know about the ledger, and when?" --world greyharbor
 canon check --world greyharbor          # should find P1–P4 from the answer key
 ```
 
+## Ingestion (implemented — Phase 0, step 1 of the pipeline)
+
+The `ingest` step (`docs/extraction.md` Stage 1 "Segment") is built: Fountain → scenes
+with `slug`, global `story_position`, `is_flashback`, and planted-annotation-free
+`raw_text`, loaded into `worlds`/`works`/`scenes`. The Fountain parser is stdlib-only;
+only the Postgres loader needs a dependency.
+
+```bash
+# Preview segmentation — no database, no dependencies:
+python -m canon ingest fixtures/greyharbor/*.fountain --world greyharbor --dry-run
+
+# Load into Postgres (after `supabase start`):
+pip install -r requirements.txt
+export CANON_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+psql "$CANON_DB_URL" -f db/schema.sql
+python -m canon ingest fixtures/greyharbor/*.fountain --world greyharbor --reset-world
+
+# Tests (graded against the greyharbor fixtures):
+python -m pytest -q            # or: python tests/test_fountain.py
+```
+
+Next steps in the pipeline (not yet built): `extract` (LLM → assertions), entity
+resolution + confirm queue, `ask`, `check`.
+
 ## The one rule
 
 If a proposed feature generates story content, it's out of scope. Forever. See `docs/decisions.md` D1.

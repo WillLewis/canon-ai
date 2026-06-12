@@ -1,0 +1,19 @@
+[project]
+name = "canon-ai"
+version = "0.0.1"
+description = "Continuity and canon engine for serialized fiction (Phase 0)."
+requires-python = ">=3.10"
+dependencies = ["psycopg[binary]>=3.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+canon = "canon.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["canon"]
