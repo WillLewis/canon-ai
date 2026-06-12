@@ -117,8 +117,22 @@ def load_into(conn, world_name: str, works: list[ParsedWork], reset: bool = Fals
     cur = conn.cursor()
 
     if reset:
-        # Cascades to works/scenes/entities/assertions for a clean fixture reload.
-        cur.execute("DELETE FROM worlds WHERE name = %s", (world_name,))
+        # FK-safe teardown for a clean reload. A plain `DELETE FROM worlds` cascade
+        # is NOT reliable here: scene_presence.entity_id / character_locations are
+        # NO ACTION, and Postgres checks them mid-cascade (before the scenes branch
+        # clears those rows), so the delete can fail once a graph is loaded. Delete
+        # the dependent rows first, in dependency order, then the world.
+        _w = "(SELECT id FROM worlds WHERE name = %s)"
+        cur.execute(f"DELETE FROM findings WHERE world_id IN {_w}", (world_name,))
+        cur.execute(f"DELETE FROM assertions WHERE world_id IN {_w}", (world_name,))
+        cur.execute(
+            "DELETE FROM scene_presence WHERE scene_id IN "
+            "(SELECT s.id FROM scenes s JOIN works w ON w.id = s.work_id "
+            " JOIN worlds wd ON wd.id = w.world_id WHERE wd.name = %s)",
+            (world_name,),
+        )
+        cur.execute(f"DELETE FROM entities WHERE world_id IN {_w}", (world_name,))
+        cur.execute("DELETE FROM worlds WHERE name = %s", (world_name,))  # cascades works/scenes
 
     cur.execute("SELECT id FROM worlds WHERE name = %s", (world_name,))
     row = cur.fetchone()

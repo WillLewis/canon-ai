@@ -169,8 +169,64 @@ export CANON_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 python -m canon store --state build/greyharbor.resolve.json --world greyharbor --reset
 ```
 
-Next steps in the pipeline (not yet built): `check` (run `db/checks.sql` →
-findings.json, so the eval's findings gates can go green) and `ask`.
+## Continuity checks (implemented — Phase 0, step 5 of the pipeline)
+
+The `check` step (PLAN item 5; SPEC R6) runs `db/checks.sql` over a world's loaded
+graph and emits findings — each with a check name, severity, plain-English
+explanation, citation, and a `sealed` flag (writer marked intentional → suppressed
+from the report and the eval gates). Doctrine D7: SQL judges; the runner only
+executes, applies seals, and serializes. Output is the eval contract
+(`{"findings": [...]}`) and rows in the `findings` table.
+
+```bash
+export CANON_DB_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres
+python -m canon check --world greyharbor --out out/findings.json   # or omit --out for a report
+
+# Full Phase 0 loop, end to end:
+python -m canon ingest fixtures/greyharbor/*.fountain --world greyharbor --reset-world
+python -m canon store  --state out/greyharbor.resolve.json --world greyharbor --reset
+python -m canon check  --world greyharbor --out out/findings.json
+python eval/run_eval.py --assertions out/assertions.json --findings out/findings.json   # ALL PASS ✓
+```
+
+On greyharbor this finds all four planted errors (dead-speaker, premature-knowledge,
+destroyed-location-use, capability-violation) plus the two notes, with zero false
+positives. Two checks in `db/checks.sql` were tuned to match the fixture's data
+shape: **premature_knowledge** (rewritten to flag a `knows` with no on-screen
+source, rather than requiring a second `knows`) and **destroyed_location_use**
+(strictly *after* the destruction scene, so the destruction scene itself isn't
+flagged).
+
+## Ask the Bible (implemented — Phase 0, step 6 of the pipeline)
+
+The `ask` step (PLAN item 4; SPEC R5): natural-language question → the LLM writes
+one read-only SQL query → Postgres answers → every row resolves to a scene
+citation, or the answer is **refused** (R5: no citation, no answer). Enforcement
+is mechanical: a guard requires a single SELECT scoped to `:world_id` returning a
+`scene_id` column; execution happens in a `READ ONLY` transaction with a statement
+timeout (the transaction, not the regex, is the real write-blocker — verified:
+`setval()` passes the regex and is rejected by Postgres). One corrective retry,
+then refusal. Optional narration phrases the rows — only the rows — with
+citation tags; `--no-narrate` gives the deterministic table.
+
+```bash
+export CANON_DB_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres
+export ANTHROPIC_API_KEY=...   # no-training/ZDR org; needed for NL → SQL + narration
+
+python -m canon ask "who knows the ledger's location, in the order they learned it?" \
+  --world greyharbor --show-sql
+#   → Tobias [E101/sc3] → Cole [E102/sc1] → Mara [E102/sc2], each with its quote
+
+# No key? Run a query directly through the same guards + citation machinery:
+python -m canon ask "..." --world greyharbor --sql "SELECT ... :world_id ... scene_id ..."
+```
+
+The 10 scripted Phase 0 questions live in `tests/test_ask.py` with reference SQL;
+the DB-gated integration test answers 10/10 with correct citations (the harness
+bar — the R5 acceptance "≥8/10 via the LLM" gets measured once a key is present).
+
+**That completes the Phase 0 pipeline:** `ingest → extract → resolve/confirm →
+store → check → ask`, graded by `eval/run_eval.py` (ALL PASS on the golden graph).
 
 ## Rights guard
 

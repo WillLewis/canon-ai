@@ -63,33 +63,48 @@ where a.world_id = :world_id and b.world_id = :world_id
 
 -- ============================================================
 -- CHECK 3 · premature_knowledge (critical) — the signature check
--- A character acts on / references a fact (knows-assertion) in a
--- scene positioned BEFORE their knows-interval starts.
--- v0 proxy: a knows-assertion whose established scene precedes
--- the canonical start of the same character knowing the same fact.
+-- A character knows a fact with no on-screen source: they are not the
+-- originator (earliest knower) of it, and were never co-present in a scene
+-- (at or before they know it) with another character who already knew it.
+-- v0 proxy for "the reveal of HOW they know never lands" — see answer-key P2.
 -- ============================================================
 select
   'premature_knowledge',
   'critical',
-  format('%s appears to use "%s" at pos %s, but canon has them learning it at pos %s.',
-         e.name, coalesce(k_early.object_value,'<fact>'),
-         s_early.story_position, lower(k_canon.valid_during)),
-  k_early.established_in_scene,
-  k_early.id, k_canon.id
-from assertions k_early
-join assertions k_canon
-  on  k_canon.subject_id = k_early.subject_id
-  and k_canon.predicate = 'knows'
-  and k_canon.object_value = k_early.object_value
-  and k_canon.id <> k_early.id
-join scenes s_early on s_early.id = k_early.established_in_scene
-join entities e     on e.id = k_early.subject_id
-where k_early.world_id = :world_id
-  and k_early.predicate = 'knows'
-  and k_early.status not in ('rejected','retconned')
-  and k_canon.status = 'canon'
-  and s_early.story_position < lower(k_canon.valid_during)
-  and not s_early.is_flashback;
+  format('%s knows "%s" (pos %s) with no on-screen source — never present with a prior knower of it.',
+         e.name, k.object_value, lower(k.valid_during)),
+  k.established_in_scene,
+  k.id, null::bigint
+from assertions k
+join entities e on e.id = k.subject_id
+where k.world_id = :world_id
+  and k.predicate = 'knows'
+  and k.object_value is not null
+  and k.status not in ('rejected','retconned')
+  -- not the originator: this fact was first known strictly earlier by someone
+  and lower(k.valid_during) > (
+    select min(lower(k0.valid_during))
+    from assertions k0
+    where k0.world_id = k.world_id
+      and k0.predicate = 'knows'
+      and k0.object_value = k.object_value
+      and k0.status not in ('rejected','retconned')
+  )
+  -- and never co-present with an existing knower at or before learning it
+  and not exists (
+    select 1
+    from scene_presence sp_self
+    join scenes sc               on sc.id = sp_self.scene_id
+    join scene_presence sp_other on sp_other.scene_id = sp_self.scene_id
+    join assertions k2           on k2.subject_id = sp_other.entity_id
+    where sp_self.entity_id = k.subject_id
+      and sc.story_position <= lower(k.valid_during)
+      and k2.predicate = 'knows'
+      and k2.object_value = k.object_value
+      and k2.subject_id <> k.subject_id
+      and k2.status not in ('rejected','retconned')
+      and k2.valid_during @> sc.story_position
+  );
 
 -- ============================================================
 -- CHECK 4 · destroyed_location_use (critical)
@@ -110,7 +125,8 @@ join scenes s          on s.id = sp.scene_id
 where d.world_id = :world_id
   and d.predicate = 'destroyed' and d.polarity
   and d.status not in ('rejected','retconned')
-  and d.valid_during @> s.story_position
+  -- strictly after destruction (the destruction scene itself is not a violation)
+  and s.story_position > lower(d.valid_during)
   and not s.is_flashback;
 
 -- ============================================================

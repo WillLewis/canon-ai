@@ -87,11 +87,14 @@ def test_load_into_fresh_world_inserts_expected_rows():
     assert all(c[1][3] is False for c in scene_inserts)
 
 
-def test_reset_world_deletes_first():
+def test_reset_world_tears_down_fk_safe_before_worlds():
     works = ingest.parse_works(FILES)
     conn = FakeConn([None, (1,), (0,), (10,), (11,)])
     ingest.load_into(conn, "greyharbor", works, reset=True)
-    assert conn.cur.calls[0][0].startswith("DELETE FROM worlds")
+    deletes = [c[0] for c in conn.cur.calls if c[0].lstrip().upper().startswith("DELETE")]
+    assert deletes[0].startswith("DELETE FROM findings")        # dependents first
+    assert any("FROM scene_presence" in d for d in deletes)
+    assert deletes[-1].startswith("DELETE FROM worlds")         # world last
 
 
 def test_duplicate_ingest_without_reset_is_refused():
