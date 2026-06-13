@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Database unreachable · Canon Workbench</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar"><div class="brand"><a href="/">Canon<span class="dot">·</span>Workbench</a></div></header>
+<main class="content">
+  <section class="panel">
+    <h1>Can't reach Postgres</h1>
+    <p class="muted">The workbench tried to connect to:</p>
+    <pre class="scene-text">{{ db_url }}</pre>
+    <p>Start the database (or point the app elsewhere with <code>CANON_DB_URL</code>), then reload.</p>
+    <details><summary>error detail</summary><pre class="scene-text">{{ error }}</pre></details>
+  </section>
+</main>
+<footer class="foot"><span>Read-only inspector — a microscope for the engine.</span></footer>
+</body>
+</html>

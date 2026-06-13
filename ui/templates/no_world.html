@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>No worlds · Canon Workbench</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar"><div class="brand"><a href="/">Canon<span class="dot">·</span>Workbench</a></div></header>
+<main class="content">
+  <section class="panel">
+    <h1>No worlds loaded</h1>
+    <p class="muted">The database is reachable but has no <code>worlds</code> rows.</p>
+    <p>Load the dev fixture, then refresh:</p>
+    <pre class="scene-text">python -m canon ingest fixtures/greyharbor/*.fountain --world greyharbor_s1 --reset-world
+python -m canon store  --state out/greyharbor.resolve.json --world greyharbor_s1 --reset
+python -m canon check  --world greyharbor_s1</pre>
+  </section>
+</main>
+<footer class="foot"><span>Read-only inspector — a microscope for the engine.</span></footer>
+</body>
+</html>

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Findings · {{ world.name }}{% endblock %}
+{% block content %}
+
+{% set live = findings | rejectattr('sealed') | list %}
+{% set sealed = findings | selectattr('sealed') | list %}
+
+<div class="page-head">
+  <h1>Findings <span class="count">{{ live|length }} live</span>{% if sealed %} <span class="count muted">{{ sealed|length }} sealed</span>{% endif %}</h1>
+  <p class="sub">Continuity violations from <code>db/checks.sql</code>. Each cites its scene; seal one a writer marked intentional.</p>
+</div>
+
+{% macro finding_row(f) %}
+<tr class="{{ 'is-sealed' if f.sealed }}">
+  <td>{{ m.severity_badge(f.severity) }}</td>
+  <td><a class="check" href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a></td>
+  <td class="expl">{{ f.explanation }}</td>
+  <td class="cite-cell">
+    {% if f.scene_id %}{{ m.cite(f.scene_id, f.scene_slug, f.story_position, f.episode_title) }}{% else %}<span class="muted">—</span>{% endif %}
+  </td>
+  <td>{% if f.sealed %}<span class="badge status-sealed">sealed</span>{% endif %}</td>
+</tr>
+{% endmacro %}
+
+{% for sev in ['critical','warning','note'] %}
+  {% set group = live | selectattr('severity','equalto',sev) | list %}
+  {% if group %}
+  <section class="panel" id="{{ sev }}">
+    <h2>{{ m.severity_badge(sev) }} <span class="count">{{ group|length }}</span></h2>
+    <table class="grid findings">
+      <thead><tr><th>severity</th><th>check</th><th>explanation</th><th>citation</th><th></th></tr></thead>
+      <tbody>{% for f in group %}{{ finding_row(f) }}{% endfor %}</tbody>
+    </table>
+  </section>
+  {% endif %}
+{% endfor %}
+
+{% if not live %}
+<section class="panel"><p class="muted">No live findings. {% if sealed %}All {{ sealed|length }} are sealed.{% else %}Clean — or run <code>canon check --world {{ world.name }}</code>.{% endif %}</p></section>
+{% endif %}
+
+{% if sealed %}
+<section class="panel sealed-panel" id="sealed">
+  <h2>Sealed <span class="count">{{ sealed|length }}</span> <span class="sub-inline">— writer marked intentional, suppressed on re-check</span></h2>
+  <table class="grid findings">
+    <thead><tr><th>severity</th><th>check</th><th>explanation</th><th>citation</th><th></th></tr></thead>
+    <tbody>{% for f in sealed %}{{ finding_row(f) }}{% endfor %}</tbody>
+  </table>
+</section>
+{% endif %}
+
+{% endblock %}

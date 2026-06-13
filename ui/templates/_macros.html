@@ -1,0 +1,68 @@
+{# Reusable fragments. Imported `with context` so `world` is in scope. #}
+
+{%- macro wq(extra='') -%}
+?world={{ world.name|urlencode }}{{ extra }}
+{%- endmacro -%}
+
+{# Citation chip: click → the scene, optionally focusing one assertion's quote. #}
+{%- macro cite(scene_id, slug, story_position, episode, assertion_id=None) -%}
+<a class="cite" href="/scenes/{{ scene_id }}{{ wq('&q=' ~ assertion_id if assertion_id else '') }}" title="{{ slug }}">
+  <span class="cite-ep">{{ (episode.split('—')[0].strip() if episode and '—' in episode else (episode or 'scene')) }}</span>
+  <span class="cite-pos">pos {{ story_position }}</span>
+  <span class="cite-slug">{{ slug or '(no slug)' }}</span>
+</a>
+{%- endmacro -%}
+
+{%- macro kind_badge(kind) -%}
+<span class="badge kind-{{ kind }}">{{ kind }}</span>
+{%- endmacro -%}
+
+{%- macro status_badge(status) -%}
+<span class="badge status-{{ status }}">{{ status }}</span>
+{%- endmacro -%}
+
+{%- macro severity_badge(sev) -%}
+<span class="badge sev-{{ sev }}">{{ sev }}</span>
+{%- endmacro -%}
+
+{%- macro entity_link(id, name, kind=None) -%}
+<a class="ent" href="/entities/{{ id }}{{ wq() }}">{{ name }}{% if kind %} <span class="ent-kind">{{ kind }}</span>{% endif %}</a>
+{%- endmacro -%}
+
+{# The object side of an assertion: entity link, literal value, or nested assertion. #}
+{%- macro obj(a) -%}
+{%- set o = object_side(a) -%}
+{%- if o.kind == 'entity' -%}{{ entity_link(o.id, o.name) }}
+{%- elif o.kind == 'value' -%}<span class="val">“{{ o.value }}”</span>
+{%- elif o.kind == 'assertion' -%}<a class="ent" href="/assertions/{{ o.id }}{{ wq() }}">assertion&nbsp;#{{ o.id }}</a>
+{%- else -%}<span class="muted">—</span>
+{%- endif -%}
+{%- endmacro -%}
+
+{# subject —predicate→ object, with negation marker for polarity=false. #}
+{%- macro triple(a) -%}
+{{ entity_link(a.subject_id, a.subject_name) }}
+<span class="pred{{ ' neg' if not a.polarity else '' }}">{% if not a.polarity %}¬ {% endif %}{{ a.predicate }}</span>
+{{ obj(a) }}
+{%- endmacro -%}
+
+{# A full assertion card: triple, range, status/confidence, quote, citation. #}
+{%- macro assertion_card(a) -%}
+<div class="acard">
+  <div class="acard-head">
+    <a class="aid" href="/assertions/{{ a.id }}{{ wq() }}">#{{ a.id }}</a>
+    <span class="triple">{{ triple(a) }}</span>
+  </div>
+  <div class="acard-meta">
+    <span class="chip" title="{{ a.valid_during }}">{{ gloss_range(a.valid_during) }}</span>
+    {{ status_badge(a.status) }}
+    {% if a.confirmed_by_human %}<span class="badge ok" title="confirmed by a human">confirmed</span>{% endif %}
+    {% if a.superseded_by %}<span class="badge status-retconned" title="superseded by #{{ a.superseded_by }}">retconned</span>{% endif %}
+    <span class="conf" title="extraction confidence">conf {{ '%.2f'|format(a.confidence) }}</span>
+  </div>
+  {% if a.supporting_quote %}<blockquote class="quote">“{{ a.supporting_quote }}”</blockquote>{% endif %}
+  <div class="acard-cite">{{ cite(a.scene_id, a.scene_slug, a.story_position, a.episode_title, a.id) }}
+    {% if a.is_flashback %}<span class="badge flashback">flashback</span>{% endif %}
+  </div>
+</div>
+{%- endmacro -%}

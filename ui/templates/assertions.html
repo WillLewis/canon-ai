@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Assertions · {{ world.name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Assertions <span class="count">{{ total }}</span></h1>
+  {% if subject_entity %}
+  <p class="sub">subject = {{ m.entity_link(subject_entity.id, subject_entity.name, subject_entity.kind) }}
+    <a class="clear" href="/assertions{{ m.wq() }}">clear subject</a></p>
+  {% endif %}
+</div>
+
+<form class="filters" method="get" action="/assertions">
+  <input type="hidden" name="world" value="{{ world.name }}">
+  {% if subject_entity %}<input type="hidden" name="subject" value="{{ subject_entity.id }}">{% endif %}
+  <label>predicate
+    <select name="predicate" onchange="this.form.submit()">
+      <option value="">all</option>
+      {% for p in predicates %}<option value="{{ p }}" {{ 'selected' if p==sel_predicate }}>{{ p }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>status
+    <select name="status" onchange="this.form.submit()">
+      <option value="">all</option>
+      {% for s in ['draft','canon','sealed','retconned','rejected'] %}<option value="{{ s }}" {{ 'selected' if s==sel_status }}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>search
+    <input type="search" name="q" value="{{ q }}" placeholder="name, value, quote…">
+  </label>
+  <button type="submit">apply</button>
+  {% if sel_predicate or sel_status or q %}<a class="clear" href="/assertions{{ m.wq('&subject=' ~ subject_entity.id if subject_entity else '') }}">clear filters</a>{% endif %}
+</form>
+
+<table class="grid assertions">
+  <thead>
+    <tr><th>#</th><th>subject</th><th>predicate</th><th>object</th><th>valid</th><th>status</th><th class="num">conf</th><th>citation</th></tr>
+  </thead>
+  <tbody>
+    {% for a in assertions %}
+    <tr>
+      <td><a class="aid" href="/assertions/{{ a.id }}{{ m.wq() }}">{{ a.id }}</a></td>
+      <td>{{ m.entity_link(a.subject_id, a.subject_name) }}</td>
+      <td><span class="pred{{ ' neg' if not a.polarity else '' }}">{% if not a.polarity %}¬ {% endif %}{{ a.predicate }}</span></td>
+      <td>{{ m.obj(a) }}</td>
+      <td class="mono" title="{{ a.valid_during }}">{{ gloss_range(a.valid_during) }}</td>
+      <td>{{ m.status_badge(a.status) }}</td>
+      <td class="num">{{ '%.2f'|format(a.confidence) }}</td>
+      <td>{{ m.cite(a.scene_id, a.scene_slug, a.story_position, a.episode_title, a.id) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="muted">No assertions match.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if total_pages > 1 %}
+<nav class="pager">
+  {% if page > 1 %}<a href="/assertions{{ merge_query(page=page-1) }}">← prev</a>{% else %}<span class="off">← prev</span>{% endif %}
+  <span class="pageinfo">page {{ page }} / {{ total_pages }}</span>
+  {% if page < total_pages %}<a href="/assertions{{ merge_query(page=page+1) }}">next →</a>{% else %}<span class="off">next →</span>{% endif %}
+</nav>
+{% endif %}
+
+{% endblock %}

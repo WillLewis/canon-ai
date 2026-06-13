@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}{{ entity.name }} · {{ world.name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="crumb"><a href="/entities{{ m.wq() }}">Entities</a> /</div>
+  <h1>{{ entity.name }} {{ m.kind_badge(entity.kind) }}
+    {% if entity.provisional %}<span class="badge prov">provisional</span>{% endif %}
+  </h1>
+</div>
+
+<div class="cols">
+  <div class="col-main">
+    <section class="panel">
+      <h2>Asserts <span class="count">{{ entity.as_subject|length }}</span>
+        <a class="seeall" href="/assertions{{ m.wq('&subject=' ~ entity.id) }}">view as list →</a></h2>
+      {% for a in entity.as_subject %}{{ m.assertion_card(a) }}{% else %}
+      <p class="muted">This entity is never an assertion subject.</p>{% endfor %}
+    </section>
+
+    {% if entity.as_object %}
+    <section class="panel">
+      <h2>Referenced by <span class="count">{{ entity.as_object|length }}</span></h2>
+      {% for a in entity.as_object %}{{ m.assertion_card(a) }}{% endfor %}
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="col-side">
+    <section class="panel">
+      <h2>Dossier</h2>
+      {% if entity.dossier %}<p class="dossier-full">{{ entity.dossier }}</p>
+      {% else %}<p class="muted">No dossier.</p>{% endif %}
+    </section>
+    <section class="panel">
+      <h2>Aliases <span class="count">{{ entity.aliases|length }}</span></h2>
+      {% if entity.aliases %}
+      <ul class="aliases">
+        {% for al in entity.aliases %}
+        <li><span class="alias">{{ al.alias }}</span> <span class="alias-kind">{{ al.kind }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No aliases.</p>{% endif %}
+    </section>
+  </aside>
+</div>
+
+{% endblock %}

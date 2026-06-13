@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}{{ scene.slug or 'scene' }} · {{ world.name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="crumb"><a href="/scenes{{ m.wq() }}">Scenes</a> /</div>
+  <h1>{{ scene.slug or '(no slug)' }}
+    {% if scene.is_flashback %}<span class="badge flashback">flashback</span>{% endif %}
+  </h1>
+  <p class="sub">{{ scene.episode_title }} · <span class="mono">story position {{ scene.story_position }}</span></p>
+</div>
+
+<div class="cols">
+  <div class="col-main">
+    <section class="panel">
+      <h2>Scene text</h2>
+      {% if highlight_quote %}
+      <p class="cite-note">Highlighting the supporting quote for
+        <a href="/assertions/{{ focus_assertion }}{{ m.wq() }}">assertion #{{ focus_assertion }}</a>.
+        {% if not quote_present(scene.raw_text, highlight_quote) %}
+        <span class="warn">(quote not located verbatim in this scene)</span>{% endif %}
+      </p>
+      {% endif %}
+      <pre class="scene-text">{{ scene.raw_text | highlight(highlight_quote) }}</pre>
+    </section>
+  </div>
+
+  <aside class="col-side">
+    <section class="panel">
+      <h2>Present <span class="count">{{ scene.present|length }}</span></h2>
+      {% if scene.present %}
+      <ul class="present">
+        {% for e in scene.present %}
+        <li>{{ m.kind_badge(e.kind) }} {{ m.entity_link(e.id, e.name) }}
+          {% if e.provisional %}<span class="badge prov">prov</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No recorded presence.</p>{% endif %}
+    </section>
+
+    {% if scene.findings %}
+    <section class="panel">
+      <h2>Findings here <span class="count">{{ scene.findings|length }}</span></h2>
+      <ul class="finding-list">
+        {% for f in scene.findings %}
+        <li>{{ m.severity_badge(f.severity) }}
+          <a href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a>
+          {% if f.sealed %}<span class="badge status-sealed">sealed</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+
+<section class="panel">
+  <h2>Assertions established here <span class="count">{{ scene.assertions|length }}</span></h2>
+  {% for a in scene.assertions %}{{ m.assertion_card(a) }}{% else %}
+  <p class="muted">No assertions were established in this scene.</p>{% endfor %}
+</section>
+
+{% endblock %}

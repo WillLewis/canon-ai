@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Scenes · {{ world.name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Scenes <span class="count">{{ scenes|length }}</span></h1>
+  <p class="sub">Ordered by global story position — the axis continuity checks reason over.</p>
+</div>
+
+<table class="grid scenes">
+  <thead>
+    <tr><th class="num">pos</th><th>episode</th><th>slug</th><th class="num">present</th><th class="num">asserts</th></tr>
+  </thead>
+  <tbody>
+    {% set ns = namespace(ep=None) %}
+    {% for s in scenes %}
+      {% if s.episode_title != ns.ep %}
+      {% set ns.ep = s.episode_title %}
+      <tr class="ep-row" id="work-{{ s.work_id }}"><td colspan="5">{{ s.episode_title }}</td></tr>
+      {% endif %}
+      <tr>
+        <td class="num mono">{{ s.story_position }}</td>
+        <td class="muted small">{{ (s.episode_title.split('—')[0].strip() if '—' in s.episode_title else s.episode_title) }}</td>
+        <td>
+          <a href="/scenes/{{ s.id }}{{ m.wq() }}">{{ s.slug or '(no slug)' }}</a>
+          {% if s.is_flashback %}<span class="badge flashback">flashback</span>{% endif %}
+        </td>
+        <td class="num">{{ s.n_present }}</td>
+        <td class="num">{{ s.n_assertions }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

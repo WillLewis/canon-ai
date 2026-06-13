@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Assertion #{{ a.id }} · {{ world.name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="crumb"><a href="/assertions{{ m.wq() }}">Assertions</a> /</div>
+  <h1>Assertion <span class="mono">#{{ a.id }}</span></h1>
+</div>
+
+<section class="panel claim">
+  <div class="claim-triple">{{ m.triple(a) }}</div>
+  <div class="claim-meta">
+    <span class="chip" title="{{ a.valid_during }}">valid {{ gloss_range(a.valid_during) }}</span>
+    {{ m.status_badge(a.status) }}
+    {% if a.confirmed_by_human %}<span class="badge ok">human-confirmed</span>{% endif %}
+    {% if not a.polarity %}<span class="badge neg-badge">negated</span>{% endif %}
+    {% if a.superseded_by %}<span class="badge status-retconned">superseded by
+      <a href="/assertions/{{ a.superseded_by }}{{ m.wq() }}">#{{ a.superseded_by }}</a></span>{% endif %}
+    <span class="conf">confidence {{ '%.2f'|format(a.confidence) }}</span>
+  </div>
+</section>
+
+{# Citation inspector: the establishing scene with the supporting quote highlighted. #}
+<section class="panel">
+  <h2>Citation</h2>
+  <div class="cite-head">
+    {{ m.cite(a.scene_id, a.scene_slug, a.story_position, a.episode_title) }}
+    {% if a.is_flashback %}<span class="badge flashback">flashback</span>{% endif %}
+    <a class="seeall" href="/scenes/{{ a.scene_id }}{{ m.wq('&q=' ~ a.id) }}">open full scene →</a>
+  </div>
+  {% if a.supporting_quote %}
+  <p class="cite-note">Supporting quote, highlighted in the establishing scene:</p>
+  {% else %}
+  <p class="cite-note muted">This assertion carries no supporting quote.</p>
+  {% endif %}
+  <pre class="scene-text">{{ a.scene_raw_text | highlight(a.supporting_quote) }}</pre>
+</section>
+
+{% if a.findings %}
+<section class="panel">
+  <h2>Findings citing this assertion <span class="count">{{ a.findings|length }}</span></h2>
+  <ul class="finding-list">
+    {% for f in a.findings %}
+    <li>
+      {{ m.severity_badge(f.severity) }}
+      <a href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a>
+      {% if f.sealed %}<span class="badge status-sealed">sealed</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% endblock %}

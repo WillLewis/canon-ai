@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Entities · {{ world.name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Entities <span class="count">{{ entities|length }}</span></h1>
+</div>
+
+<form class="filters" method="get" action="/entities">
+  <input type="hidden" name="world" value="{{ world.name }}">
+  <label>kind
+    <select name="kind" onchange="this.form.submit()">
+      <option value="">all</option>
+      {% for k in kinds %}<option value="{{ k }}" {{ 'selected' if k==sel_kind }}>{{ k }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>search
+    <input type="search" name="q" value="{{ q }}" placeholder="name or alias…">
+  </label>
+  <button type="submit">apply</button>
+  {% if sel_kind or q %}<a class="clear" href="/entities{{ m.wq() }}">clear</a>{% endif %}
+</form>
+
+<table class="grid">
+  <thead>
+    <tr><th>kind</th><th>name</th><th>dossier</th><th class="num">aliases</th><th class="num">asserts</th><th class="num">ref'd</th></tr>
+  </thead>
+  <tbody>
+    {% for e in entities %}
+    <tr>
+      <td>{{ m.kind_badge(e.kind) }}</td>
+      <td>
+        <a class="ent" href="/entities/{{ e.id }}{{ m.wq() }}">{{ e.name }}</a>
+        {% if e.provisional %}<span class="badge prov" title="provisional — unresolved, in the confirm queue">provisional</span>{% endif %}
+      </td>
+      <td class="dossier">{{ e.dossier or '' }}</td>
+      <td class="num">{{ e.n_aliases }}</td>
+      <td class="num">{{ e.n_subject }}</td>
+      <td class="num">{{ e.n_object }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">No entities match.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

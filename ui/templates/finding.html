@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}{{ f.check_name }} #{{ f.id }} · {{ world.name }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="crumb"><a href="/findings{{ m.wq() }}">Findings</a> /</div>
+  <h1>{{ m.severity_badge(f.severity) }} {{ f.check_name }}
+    {% if f.sealed %}<span class="badge status-sealed">sealed</span>{% endif %}
+  </h1>
+</div>
+
+<section class="panel finding-expl">
+  <p class="expl-full">{{ f.explanation }}</p>
+</section>
+
+<div class="cols">
+  <div class="col-main">
+    {# The cited scene — highlight an anchor quote when it lives in this scene. #}
+    <section class="panel">
+      <h2>Cited scene</h2>
+      {% if f.scene %}
+      {% set hq = None %}
+      {% if f.a and quote_present(f.scene.raw_text, f.a.supporting_quote) %}{% set hq = f.a.supporting_quote %}
+      {% elif f.b and quote_present(f.scene.raw_text, f.b.supporting_quote) %}{% set hq = f.b.supporting_quote %}{% endif %}
+      <div class="cite-head">
+        {{ m.cite(f.scene.id, f.scene.slug, f.scene.story_position, f.scene.episode_title) }}
+        {% if f.scene.is_flashback %}<span class="badge flashback">flashback</span>{% endif %}
+        <a class="seeall" href="/scenes/{{ f.scene.id }}{{ m.wq() }}">open full scene →</a>
+      </div>
+      <pre class="scene-text">{{ f.scene.raw_text | highlight(hq) }}</pre>
+      {% else %}<p class="muted">This finding has no cited scene.</p>{% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Linked assertions</h2>
+      {% if f.a %}{{ m.assertion_card(f.a) }}{% endif %}
+      {% if f.b %}{{ m.assertion_card(f.b) }}{% endif %}
+      {% if not f.a and not f.b %}<p class="muted">No assertions linked.</p>{% endif %}
+    </section>
+  </div>
+
+  <aside class="col-side">
+    {# The one write op: seal / unseal. DB-native — writes the seals table. #}
+    <section class="panel seal-box {{ 'sealed' if f.sealed }}">
+      <h2>Seal status</h2>
+      {% if f.sealed %}
+        <p class="seal-state on">✓ Sealed — suppressed from the report and re-checks.</p>
+        {% if f.seal and f.seal.reason %}
+        <p class="seal-reason"><span class="lbl">reason</span> {{ f.seal.reason }}</p>
+        {% else %}<p class="seal-reason muted">No reason recorded.</p>{% endif %}
+        <form method="post" action="/findings/{{ f.id }}/unseal{{ m.wq() }}">
+          <button type="submit" class="btn-unseal">Unseal</button>
+        </form>
+      {% elif f.sealable %}
+        <p class="seal-state">Live. If a writer marked this intentional, seal it to
+          suppress it on the next <code>canon check</code>.</p>
+        <form method="post" action="/findings/{{ f.id }}/seal{{ m.wq() }}">
+          <label class="seal-label">reason (optional)
+            <textarea name="reason" rows="3" placeholder="e.g. flashback — intentional; cleared by showrunner"></textarea>
+          </label>
+          <button type="submit" class="btn-seal">Seal this finding</button>
+        </form>
+      {% else %}
+        <p class="muted">This finding has no anchor assertion, so it can't be sealed.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel meta-box">
+      <h2>Detail</h2>
+      <dl class="kv">
+        <dt>check</dt><dd class="mono">{{ f.check_name }}</dd>
+        <dt>severity</dt><dd>{{ m.severity_badge(f.severity) }}</dd>
+        <dt>finding id</dt><dd class="mono">#{{ f.id }}</dd>
+        <dt>assertion A</dt><dd>{% if f.assertion_a %}<a href="/assertions/{{ f.assertion_a }}{{ m.wq() }}">#{{ f.assertion_a }}</a>{% else %}—{% endif %}</dd>
+        <dt>assertion B</dt><dd>{% if f.assertion_b %}<a href="/assertions/{{ f.assertion_b }}{{ m.wq() }}">#{{ f.assertion_b }}</a>{% else %}—{% endif %}</dd>
+      </dl>
+    </section>
+  </aside>
+</div>
+
+{% endblock %}

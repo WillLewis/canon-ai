@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}{{ world.name }} · Canon Workbench{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>{{ world.name }}</h1>
+  <p class="sub">State inspector — browse what the engine knows and what it flagged, each with its citation.</p>
+</div>
+
+{% set t = summary.totals %}
+<section class="cards">
+  <a class="card" href="/entities{{ m.wq() }}">
+    <div class="card-n">{{ t.entities }}</div><div class="card-l">entities</div>
+    <div class="card-sub">{% for k in summary.entities_by_kind %}{{ k.kind }} {{ k.n }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  </a>
+  <a class="card" href="/assertions{{ m.wq() }}">
+    <div class="card-n">{{ t.assertions }}</div><div class="card-l">assertions</div>
+    <div class="card-sub">{% for s in summary.assertions_by_status %}{{ s.status }} {{ s.n }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  </a>
+  <a class="card" href="/scenes{{ m.wq() }}">
+    <div class="card-n">{{ t.scenes }}</div><div class="card-l">scenes</div>
+    <div class="card-sub">{{ t.works }} works</div>
+  </a>
+  <a class="card {{ 'has-crit' if (summary.findings_by_sev | selectattr('severity','equalto','critical') | map(attribute='live') | sum) }}" href="/findings{{ m.wq() }}">
+    <div class="card-n">{{ t.findings_live }}</div><div class="card-l">live findings</div>
+    <div class="card-sub">
+      {% for s in summary.findings_by_sev|sort(attribute='severity') %}{{ s.severity }} {{ s.live }}{% if not loop.last %} · {% endif %}{% endfor %}
+      {% if t.findings_sealed %} · {{ t.findings_sealed }} sealed{% endif %}
+    </div>
+  </a>
+</section>
+
+<section class="panel">
+  <h2>Works <span class="count">{{ summary.works|length }}</span></h2>
+  <table class="grid">
+    <thead><tr><th>order</th><th>title</th><th class="num">scenes</th></tr></thead>
+    <tbody>
+      {% for w in summary.works %}
+      <tr>
+        <td class="mono">{{ w.sort_order }}</td>
+        <td><a href="/scenes{{ m.wq() }}#work-{{ w.id }}">{{ w.title }}</a></td>
+        <td class="num">{{ w.n_scenes }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Findings by severity</h2>
+  <div class="sevbars">
+    {% for s in summary.findings_by_sev|sort(attribute='severity') %}
+    <a class="sevbar" href="/findings{{ m.wq() }}#{{ s.severity }}">
+      {{ m.severity_badge(s.severity) }}
+      <span class="sevbar-n">{{ s.live }} live{% if s.sealed %} · {{ s.sealed }} sealed{% endif %}</span>
+    </a>
+    {% endfor %}
+    {% if not summary.findings_by_sev %}<p class="muted">No findings yet — run <code>canon check --world {{ world.name }}</code>.</p>{% endif %}
+  </div>
+</section>
+
+{% endblock %}

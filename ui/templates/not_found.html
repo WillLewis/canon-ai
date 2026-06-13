@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Not found · {{ world.name }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Not found</h1>
+  <p class="muted">No {{ what }} in world <strong>{{ world.name }}</strong>.</p>
+  <p><a href="/?world={{ world.name|urlencode }}">← back to overview</a></p>
+</section>
+{% endblock %}
