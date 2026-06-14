@@ -203,7 +203,7 @@ def _sp_present(assertions: list, exp: dict, alias_map: dict) -> bool:
 def _drift_layer_detail(a_id, exp, assertions, alias_map, synonyms, stage) -> tuple:
     """Classify a subject+predicate-present-but-value-drifted assertion. Entity-valued
     targets are handle-canon by nature; value-valued ones split on token overlap."""
-    if exp.get("object_value") is None:        # entity-valued (e.g. located_at): wrong entity
+    if exp.get("object_entity"):               # entity-valued (e.g. located_at): wrong entity
         return FACT_CANON, f"{a_id} ({exp['subject']}/{exp['predicate']}: entity drift, {stage})"
     score, val = _best_drift(assertions, exp, alias_map, synonyms)
     layer = FACT_CANON if score >= DRIFT_THRESHOLD else EXTRACTION_PROP
@@ -220,10 +220,19 @@ def classify_required(a_id, exp_by_id, cand_matched, res_matched,
         return "present", f"{a_id} (unknown id; skipped)"
     if a_id in res_matched:
         return "present", a_id
+    # Intransitive event (dies/destroyed/alive — no object_value, no object_entity): the
+    # "after the event" checks key on the PREDICATE alone, so a subject+predicate match IS
+    # effectively present (a stray object_value that fooled the value-matcher is not drift),
+    # and the real miss is downstream — not fact-canon / entity-drift.
+    if exp.get("object_value") is None and not exp.get("object_entity") \
+            and _sp_present(resolved, exp, alias_map):
+        return "present", f"{a_id} ({exp['subject']}/{exp['predicate']} present; checks key on predicate)"
+    # Correct in candidates but not in resolved -> resolution changed/dropped it. Check this
+    # BEFORE the resolved-drift branch, or a resolution regression is mislabeled as drift.
+    if cand_matched is not None and a_id in cand_matched:
+        return RESOLUTION, f"{a_id} (correct in candidates, lost/changed in resolution)"
     if _sp_present(resolved, exp, alias_map):
         return _drift_layer_detail(a_id, exp, resolved, alias_map, synonyms, "resolved")
-    if cand_matched is not None and a_id in cand_matched:
-        return RESOLUTION, f"{a_id} (correct in candidates, lost in resolution)"
     if candidates is not None and _sp_present(candidates, exp, alias_map):
         return _drift_layer_detail(a_id, exp, candidates, alias_map, synonyms, "extraction")
     return EXTRACTION, f"{a_id} ({exp['subject']}/{exp['predicate']} never extracted)"
@@ -266,8 +275,9 @@ def _attribute_missed(entry, exp_by_id, cand_matched, res_matched,
         return entry.get("downstream", SQL_CHECK), "knower + prior knower present; check did not fire"
 
     if check == "capability_violation" and entry.get("violation_keyword"):
-        subj = exp_by_id[entry["requires_all"][0]]["subject"]
-        if not _violation_present(resolved, subj, entry["violation_keyword"], alias_map):
+        req = entry.get("requires_all") or []
+        exp0 = exp_by_id.get(req[0]) if req else None
+        if exp0 and not _violation_present(resolved, exp0["subject"], entry["violation_keyword"], alias_map):
             return EXTRACTION, f"violating act ('{entry['violation_keyword']}') never extracted"
         return entry.get("downstream", SQL_CHECK), "cannot-rule + violating act present; check did not fire"
 
@@ -420,7 +430,13 @@ def _probe_presence_conflict(cur, wid, subject, eid):
     cur.execute(
         "SELECT count(*) FROM assertions a JOIN assertions b ON b.subject_id=a.subject_id AND b.id>a.id "
         "WHERE a.world_id=%s AND a.subject_id=%s AND a.predicate='located_at' AND b.predicate='located_at' "
-        "AND a.object_id<>b.object_id AND a.valid_during && b.valid_during", (wid, eid))
+        "AND a.object_id<>b.object_id AND a.valid_during && b.valid_during "
+        # mirror presence_conflict exactly (db/checks.sql): the check excludes open-lower
+        # (backdated, confirm-queue) intervals and rejected/retconned rows; without these the
+        # probe counts overlaps the check correctly suppresses and falsely blames the scan.
+        "AND NOT lower_inf(a.valid_during) AND NOT lower_inf(b.valid_during) "
+        "AND a.status NOT IN ('rejected','retconned') AND b.status NOT IN ('rejected','retconned')",
+        (wid, eid))
     overlaps = cur.fetchone()[0]
     if overlaps == 0:
         return STORE_RANGE, (f"{subject}: located_at present but NO two different-location intervals overlap "
@@ -430,8 +446,18 @@ def _probe_presence_conflict(cur, wid, subject, eid):
 
 
 def _probe_presence_event(cur, wid, entity, eid, predicate):
+    # Mirror the two checks faithfully (db/checks.sql): destroyed_location_use filters
+    # `d.polarity` and has NO resurrection hatch; dead_speaker has NO polarity filter but
+    # DOES exempt resurrection (a later 'alive' interval covering the scene, starting after
+    # the death). Diverging here would falsely report SQL_CHECK for a correctly-suppressed case.
+    polarity = "AND d.polarity " if predicate == "destroyed" else ""
+    hatch = ("AND NOT EXISTS (SELECT 1 FROM assertions r WHERE r.subject_id=d.subject_id "
+             "AND r.predicate='alive' AND r.polarity AND r.valid_during @> s.story_position "
+             "AND lower(r.valid_during) > lower(d.valid_during)) ") if predicate == "dies" else ""
+    exist_pol = "AND polarity " if predicate == "destroyed" else ""
+
     cur.execute("SELECT count(*), bool_or(lower(valid_during) IS NULL) FROM assertions "
-                "WHERE world_id=%s AND subject_id=%s AND predicate=%s AND polarity "
+                "WHERE world_id=%s AND subject_id=%s AND predicate=%s " + exist_pol +
                 "AND status NOT IN ('rejected','retconned')", (wid, eid, predicate))
     n, any_unanchored = cur.fetchone()
     if not n:
@@ -440,8 +466,9 @@ def _probe_presence_event(cur, wid, entity, eid, predicate):
     cur.execute(
         "SELECT count(*) FROM assertions d JOIN scene_presence sp ON sp.entity_id=d.subject_id "
         "JOIN scenes s ON s.id=sp.scene_id WHERE d.world_id=%s AND d.subject_id=%s AND d.predicate=%s "
-        "AND d.polarity AND d.status NOT IN ('rejected','retconned') AND NOT s.is_flashback "
-        "AND s.story_position > lower(d.valid_during)", (wid, eid, predicate))
+        + polarity +
+        "AND d.status NOT IN ('rejected','retconned') AND NOT s.is_flashback "
+        "AND s.story_position > lower(d.valid_during) " + hatch, (wid, eid, predicate))
     if cur.fetchone()[0]:
         return SQL_CHECK, f"{entity}: present after `{predicate}` yet unflagged — inspect the scan (flashback/escape-hatch)"
     # join empty. Present LATER than the event's establishing scene, but the event interval is
@@ -449,7 +476,7 @@ def _probe_presence_event(cur, wid, entity, eid, predicate):
     cur.execute(
         "SELECT count(*) FROM assertions d JOIN scenes es ON es.id=d.established_in_scene "
         "JOIN scene_presence sp ON sp.entity_id=d.subject_id JOIN scenes s ON s.id=sp.scene_id "
-        "WHERE d.world_id=%s AND d.subject_id=%s AND d.predicate=%s AND d.polarity "
+        "WHERE d.world_id=%s AND d.subject_id=%s AND d.predicate=%s " + polarity +
         "AND d.status NOT IN ('rejected','retconned') AND NOT s.is_flashback "
         "AND s.story_position > es.story_position", (wid, eid, predicate))
     if any_unanchored and cur.fetchone()[0]:
@@ -464,9 +491,17 @@ def _probe_capability(cur, wid, subject, eid, keyword):
                 "AND polarity AND status NOT IN ('rejected','retconned')", (wid, eid))
     if not cur.fetchone()[0]:
         return EXTRACTION, f"{subject}: no `cannot` rule extracted"
-    cur.execute(f"SELECT count(*) FROM assertions a WHERE a.world_id=%s AND a.subject_id=%s "
-                f"AND a.predicate<>'cannot' AND {_NORM_SQL} LIKE %s AND a.status NOT IN ('rejected','retconned')",
-                (wid, eid, f"%{run_eval.norm(keyword)}%"))
+    # mirror BOTH arms of capability_violation (db/checks.sql): arm A = a positive (polarity)
+    # non-cannot act whose value contains the capability handle; arm B = an explicit
+    # contradiction cannot(X, v, polarity=false). The prior probe dropped the polarity filter
+    # (arm A) and couldn't see arm B at all.
+    kw = run_eval.norm(keyword)
+    cur.execute(
+        "SELECT count(*) FROM assertions a WHERE a.world_id=%s AND a.subject_id=%s "
+        "AND a.status NOT IN ('rejected','retconned') AND ("
+        f"  (a.polarity AND a.predicate<>'cannot' AND position(%s in {_NORM_SQL})>0) "
+        f"  OR (NOT a.polarity AND a.predicate='cannot' AND {_NORM_SQL}=%s))",
+        (wid, eid, kw, kw))
     if not cur.fetchone()[0]:
         return EXTRACTION, f"{subject}: cannot-rule present but no violating act ('{keyword}') extracted"
     return SQL_CHECK, f"{subject}: cannot-rule + violating act present, yet unflagged — inspect the scan"
@@ -528,7 +563,8 @@ def render(report: dict) -> str:
         lines.append(f"MISSED ({len(missed)}) — attributed layer:")
         for c in missed:
             tag = "probed" if c.get("grounded") else " proxy"
-            lines.append(f"  {c['id']:<4} {c['check']:<22} {c['layer']:<22} [{tag}] {c['detail']}")
+            check, layer = c.get("check") or "?", c.get("layer") or "?"
+            lines.append(f"  {c['id']:<4} {check:<22} {layer:<22} [{tag}] {c.get('detail') or ''}")
         lines.append("")
     lines.append("MISS HISTOGRAM (planted only):")
     if s["miss_histogram"]:

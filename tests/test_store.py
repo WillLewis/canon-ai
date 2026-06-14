@@ -318,6 +318,65 @@ def test_backdated_bounded_continuation_anchors_to_prior_same_location_start():
     assert backdated[6] == 3 and backdated[7] == 9                  # [3,9): lower anchored, not None
 
 
+def test_backdated_event_anchors_to_establishing_scene():
+    # a `destroyed` extracted backdated (starts_here=False) would store as '(,)', leaving
+    # destroyed_location_use unable to compare "scene after destruction". It must anchor its
+    # lower bound to the scene that establishes it. (answer-key P10)
+    state = _state()
+    state["assertions"] = [
+        _assn("Chapel on the Point", "destroyed", 6, starts_here=False),     # (,) -> anchored [6,)
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    store.store_state(conn, "greyharbor", state)
+    ins = _calls(conn.cur, "insert into assertions")[-1][1]
+    assert ins[6] == 6 and ins[7] is None        # [6,): lower anchored to est scene pos, not None
+
+
+def test_backdated_located_at_is_not_event_anchored():
+    # the event anchor must NOT touch located_at — a backdated ledger stays '(,)' (it has no
+    # point-in-time semantics; the movement logic closes it later).
+    state = _state()
+    state["assertions"] = [
+        _assn("Leather Ledger", "located_at", 3, object_entity="Chapel on the Point",
+              starts_here=False),
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    store.store_state(conn, "greyharbor", state)
+    ins = _calls(conn.cur, "insert into assertions")[-1][1]
+    assert ins[6] is None                          # still (,): located_at is not event-anchored
+
+
+def test_duplicate_event_per_subject_deduped():
+    # a subject dies once; a later (backdated) restatement is redundant and must not be stored
+    # as a second event, which would double every later dead_speaker finding for that subject.
+    state = _state()
+    state["assertions"] = [
+        _assn("Tobias", "dies", 5),                          # the death
+        _assn("Tobias", "dies", 9, starts_here=False),       # redundant later restatement
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    r = store.store_state(conn, "greyharbor", state)
+    ins = _calls(conn.cur, "insert into assertions")
+    assert len(ins) == 1 and ins[0][1][6] == 5               # only the earliest death, anchored [5,)
+    assert r["deduped"] >= 1
+
+
+def test_event_dedup_keeps_earliest_even_when_input_out_of_order():
+    # dedup must keep the STORY-EARLIEST event regardless of input order (dead_speaker needs
+    # the earliest death anchor to catch in-between appearances). The loader sorts by
+    # story_position, so the later restatement listed first does NOT win.
+    state = _state()
+    state["assertions"] = [
+        _assn("Tobias", "dies", 9, starts_here=False),       # later restatement, listed FIRST
+        _assn("Tobias", "dies", 5),                          # true earlier death, listed second
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    r = store.store_state(conn, "greyharbor", state)
+    ins = _calls(conn.cur, "insert into assertions")
+    assert len(ins) == 1 and ins[0][1][6] == 5               # kept pos5, not the first-listed pos9
+    assert r["deduped"] >= 1
+
+
 def test_backdated_bounded_without_prior_same_location_stays_open():
     # no prior stay at this location -> nothing to anchor to -> lower stays open (no over-reach).
     state = _state()

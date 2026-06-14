@@ -195,3 +195,41 @@ def test_fact_match_single_token_expected_handle():
     syn = {"drive": ["drive", "driving"]}
     assert fm._fact_match("driving hard down the cliff road", "drive", syn)
     assert not fm._fact_match("walked slowly to the door", "drive", syn)
+
+
+def test_intransitive_present_with_stray_value_is_not_fact_canon():
+    # P1 (dead_speaker) requires A2 (Tobias dies — intransitive). A `dies` row exists but
+    # carries a stray object_value, so the value-matcher misses it; the check keys on the
+    # predicate, so this is downstream (store_presence), NOT fact_canonicalization/entity-drift.
+    gt, fmap = _gt(), _fmap()
+    resolved = [{"subject": "Tobias Voss", "predicate": "dies",
+                 "object_value": "killed offscreen", "object_entity": None}]
+    rep = fm.attribute([], resolved, resolved, gt, fmap)
+    c = _case(rep, "P1")
+    assert c["layer"] != fm.FACT_CANON and c["layer"] == fm.STORE_PRESENCE
+
+
+def test_resolution_drift_attributed_to_resolution_not_drift():
+    # A10 correct in candidates but drifted in resolution -> RESOLUTION, not a drift layer.
+    gt, fmap = _gt(), _fmap()
+    candidates = [knows("Cole Brannigan", "ledger location")]
+    resolved = [knows("Cole Brannigan", "somewhere unrelated")]
+    rep = fm.attribute([], candidates, resolved, gt, fmap)
+    assert _case(rep, "P2")["layer"] == fm.RESOLUTION
+
+
+def test_capability_entry_with_empty_requires_all_does_not_crash():
+    # malformed map entry (empty requires_all) must not IndexError the whole attribution run.
+    gt = _gt()
+    fmap = {"PZ": {"check": "capability_violation", "violation_keyword": "drive", "requires_all": []}}
+    rep = fm.attribute([], [], [], gt, fmap)
+    assert _case(rep, "PZ")["status"] == "missed"
+
+
+def test_render_tolerates_missing_check_and_detail():
+    # a case with check=None / detail=None must not TypeError the human-readable report.
+    report = {"summary": {"planted_caught": 0, "planted_total": 1, "miss_histogram": {},
+                          "false_positives": 0, "fp_by_check": {}, "trap_violations": []},
+              "cases": [{"id": "PZ", "check": None, "planted": True, "status": "missed",
+                         "layer": fm.SQL_CHECK, "detail": None, "grounded": False}]}
+    assert "PZ" in fm.render(report)

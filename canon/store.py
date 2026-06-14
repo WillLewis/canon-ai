@@ -37,6 +37,10 @@ CONF_CANON = 0.85
 INTRANSITIVE = resolve.INTRANSITIVE if hasattr(resolve, "INTRANSITIVE") else frozenset(
     {"alive", "dies", "destroyed"}
 )
+# Point-in-time state-change events: they HAPPEN at the scene that establishes them, so a
+# backdated (starts_here=False) one must still anchor its lower bound there — otherwise it
+# stores as '(,)' and the "after the event" checks can never compare `pos > lower(...)`.
+EVENT_PREDICATES = frozenset({"dies", "destroyed"})
 
 _SLUG_PREFIX_RE = re.compile(r"^\s*(INT\.?/EXT\.?|EXT\.?/INT\.?|INT|EXT|EST|I/E|E/I)[.\s]+", re.I)
 _SLUG_TIME_SEPS = (" - ", " — ", " – ")
@@ -177,8 +181,16 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
     # reports it as a finding instead of aborting the load.
     open_located: dict = {}  # subject_db_id -> (assertion_db_id, lower_bound, location_db_id)
     last_loc_start: dict = {}  # (subject_db_id, location_db_id) -> most recent anchored lower
+    seen_events: set = set()   # (subject_db_id, predicate) — dedup redundant dies/destroyed
     n_assertions = n_char_loc = n_skipped = n_deduped = 0
-    for a in state.assertions:
+    # Process in story-position order. The movement-closing logic, the located_at anchor,
+    # and the event dedup ("keep the EARLIEST dies/destroyed") all require it — keeping the
+    # earliest is only correct iterating earliest-first, and closing prior intervals needs a
+    # non-decreasing position. Do not rely on the caller pre-sorting. Stable, so same-position
+    # rows (e.g. a two-places-at-once conflict) keep their relative order.
+    ordered = sorted(state.assertions,
+                     key=lambda x: x.get("story_position") if x.get("story_position") is not None else (1 << 30))
+    for a in ordered:
         subj = by_norm.get(resolve._norm(a.get("subject")))
         scene_id = scene_id_by_pos.get(a.get("story_position"))
         if subj is None or scene_id is None:
@@ -187,9 +199,22 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
         obj = by_norm.get(resolve._norm(a["object_entity"])) if a.get("object_entity") else None
         obj_id = obj[0] if obj else None
         predicate = a.get("predicate")
+        # A subject dies / is destroyed once. Extraction often re-states it later (a backdated
+        # reference); storing that as a second event would double every "after the event"
+        # finding for scenes past it. Keep the earliest (first in story order — also the one
+        # dead_speaker needs to catch the in-between appearances) and drop the redundant rest.
+        if predicate in EVENT_PREDICATES and (subj[0], predicate) in seen_events:
+            n_deduped += 1
+            continue
         object_value = synth_object_value(predicate, obj_id, a.get("object_value"))
         lower, upper = valid_range(a.get("story_position"), a.get("starts_here", True),
                                    a.get("ends_here", False))
+        # A backdated point-in-time event (dies/destroyed) loses its anchor as '(,)', which
+        # makes destroyed_location_use / dead_speaker unable to compare "scene after the
+        # event". Anchor it to this establishing scene. Conservative: only enables flagging
+        # scenes strictly AFTER the establishing scene, so it adds no false positives. See P10.
+        if lower is None and predicate in EVENT_PREDICATES:
+            lower = a.get("story_position")
         confidence = max(0.0, min(1.0, float(a.get("confidence") or 0.0)))
         status = status_for(a.get("confidence"), a.get("confirmed_by_human", False), conf_canon)
 
@@ -250,6 +275,8 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
         )
         aid = cur.fetchone()[0]
         n_assertions += 1
+        if predicate in EVENT_PREDICATES:
+            seen_events.add((subj[0], predicate))
 
         if predicate == "located_at" and upper is None and sync_ok:
             # backdated rows (lower None) are tracked too, so (,) gets closed by
