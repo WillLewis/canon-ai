@@ -69,6 +69,15 @@ EVIDENCE:
 OBJECT VALUES ARE CANONICAL HANDLES (load-bearing for cross-scene checks):
 - `object_value` is a SHORT lowercase handle (2–5 words), never a sentence: "ledger location", "two sets of numbers", "drive", "find Danny". Manner, detail, and nuance go in `notes`.
 - THE SAME FACT GETS THE SAME HANDLE EVERYWHERE: before inventing a handle, scan PRIOR SCENES for the same fact and COPY its object_value character-for-character — across scenes AND across characters (if Tobias `knows "ledger location"`, Cole learning it is also `knows "ledger location"`).
+- HANDLE CONVENTIONS (use these exact shapes so identical facts collide):
+  "<thing> location" for where something is hidden/kept ("ledger location");
+  bare infinitive verbs for capabilities ("drive", "swim");
+  "find <person>" for search goals; "<person> payment" for money entries;
+  the SHORTEST noun phrase a fan-wiki index would use, never a clause.
+- HANDLE PRECISION: reuse a handle ONLY for the SAME fact. A related fact is a
+  DIFFERENT handle — knowing where someone goes on Thursdays is NOT knowing
+  "ledger location"; a decoy/fake object is NOT the real one. When unsure
+  whether two facts are identical, coin a distinct handle.
 - `dies` / `destroyed`: leave ALL object fields null; put the manner in `notes`.
 
 KNOWLEDGE & BELIEF (this distinction is load-bearing):
@@ -76,8 +85,12 @@ KNOWLEDGE & BELIEF (this distinction is load-bearing):
 - `believes`: secondhand, suspicion, inference, or an unverifiable claim. "suspects" / "thinks" / "guesses" != `knows`.
 - A character's dialogue claim about the WORLD is `believes(speaker, X)` — NOT a world-fact (characters lie). Record the world-fact too only if action lines or independent sources corroborate it. But note: a flat first-person factual statement of something the speaker has direct access to still earns `knows(speaker, ...)` — the epistemic fact, not the world-fact.
 
-CAPABILITY VIOLATIONS:
-- If PRIOR SCENES establish `cannot(X, handle)` and X now performs that very action, emit `cannot(X, same handle)` with `polarity: false` quoting the action line (this records "X is doing the thing canon says X cannot do").
+CAPABILITY VIOLATIONS & ACTIVITIES:
+- When a character performs a notable physical activity on screen (driving,
+  swimming, shooting, riding), ALWAYS emit `fact(subject, <bare verb>)` — e.g.
+  Mara behind the wheel -> `fact(Mara, "drive")` — in addition to any location
+  change. Continuity checks join on these bare-verb handles.
+- If PRIOR SCENES establish `cannot(X, handle)` and X now performs that very action, ALSO emit `cannot(X, same handle)` with `polarity: false` quoting the action line (this records "X is doing the thing canon says X cannot do").
 
 POLARITY & NEGATION:
 - `polarity: true` = the assertion holds. Use `polarity: false` for an explicit negation of a relational predicate (e.g. "he is not a member").

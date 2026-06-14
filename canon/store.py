@@ -175,8 +175,9 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
     # A same-position pair (two places at once) is left open deliberately: the
     # character_locations sync is skipped for it and the presence_conflict scan
     # reports it as a finding instead of aborting the load.
-    open_located: dict = {}  # subject_db_id -> (assertion_db_id, lower_bound)
-    n_assertions = n_char_loc = n_skipped = 0
+    open_located: dict = {}  # subject_db_id -> (assertion_db_id, lower_bound, location_db_id)
+    last_loc_start: dict = {}  # (subject_db_id, location_db_id) -> most recent anchored lower
+    n_assertions = n_char_loc = n_skipped = n_deduped = 0
     for a in state.assertions:
         subj = by_norm.get(resolve._norm(a.get("subject")))
         scene_id = scene_id_by_pos.get(a.get("story_position"))
@@ -193,11 +194,37 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
         status = status_for(a.get("confidence"), a.get("confirmed_by_human", False), conf_canon)
 
         sync_ok = True
-        if predicate == "located_at" and lower is not None:
+        if predicate == "located_at":
+            # Backdated continuation: a located_at with an OPEN lower bound but a CONCRETE
+            # upper bound is a *duration* claim ("at L until P") — usually a restatement of
+            # a stay established earlier (extraction marks the restatement starts_here=False).
+            # Anchor its lower bound to the subject's most recent start at the SAME location,
+            # so it becomes a bounded interval the presence_conflict scan can reason about
+            # instead of an open-lower interval the scan must ignore (its lower_inf guard;
+            # relaxing that guard instead would flag the backdated stay against EVERY prior
+            # location). Without anchoring, 'locked in L until dawn' while impossibly
+            # appearing elsewhere is structurally unflaggable. See answer-key P7.
+            if lower is None and upper is not None and obj_id is not None:
+                anchor = last_loc_start.get((subj[0], obj_id))
+                if anchor is not None and anchor < upper:
+                    lower = anchor
+            if lower is not None and obj_id is not None:
+                last_loc_start[(subj[0], obj_id)] = lower
+
             prev = open_located.get(subj[0])
+            if prev is not None and obj_id is not None and obj_id == prev[2]:
+                # re-assertion of the SAME location while its interval is still
+                # open ("the ledger is still in the chapel") — a reaffirmation,
+                # not a move; storing a duplicate open row would only feed the
+                # presence_conflict scan false positives. Skip it.
+                n_deduped += 1
+                continue
             if prev is not None:
-                prev_aid, prev_lower = prev
-                if lower > prev_lower:
+                prev_aid, prev_lower = prev[0], prev[1]
+                # A backdated previous interval (open lower bound, prev_lower None)
+                # closes like any other: (,) + move at P -> (,P).
+                can_close = lower is not None and (prev_lower is None or lower > prev_lower)
+                if can_close:
                     # close the previous open interval at the new position
                     cur.execute(
                         "UPDATE assertions SET valid_during = int4range(%s, %s) WHERE id = %s",
@@ -209,7 +236,7 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
                         (prev_lower, lower, prev_aid),
                     )
                 else:
-                    # two places at the same position: genuine conflict — leave the
+                    # same position (or both backdated): genuine conflict — leave the
                     # scan check to flag it; don't fight the exclusion constraint
                     sync_ok = False
 
@@ -224,10 +251,11 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
         aid = cur.fetchone()[0]
         n_assertions += 1
 
-        if predicate == "located_at" and lower is not None and upper is None and sync_ok:
-            # conflicting (sync_ok=False) rows are not tracked: the previously
-            # synced interval must stay the one the next movement closes
-            open_located[subj[0]] = (aid, lower)
+        if predicate == "located_at" and upper is None and sync_ok:
+            # backdated rows (lower None) are tracked too, so (,) gets closed by
+            # the next move; conflicting (sync_ok=False) rows are not tracked —
+            # the previously synced interval must stay the one the next move closes
+            open_located[subj[0]] = (aid, lower, obj_id)
 
         if (predicate == "located_at" and sync_ok and subj[1] == "character"
                 and obj is not None and obj[1] == "location"):
@@ -243,7 +271,7 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
     return {
         "world_id": world_id, "entities": len(reg.entities), "aliases": n_aliases,
         "scene_presence": n_presence, "assertions": n_assertions,
-        "character_locations": n_char_loc, "skipped": n_skipped,
+        "character_locations": n_char_loc, "skipped": n_skipped, "deduped": n_deduped,
     }
 
 

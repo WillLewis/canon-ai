@@ -58,6 +58,11 @@ where a.world_id = :world_id and b.world_id = :world_id
   and a.predicate = 'located_at' and b.predicate = 'located_at'
   and a.object_id <> b.object_id
   and a.valid_during && b.valid_during
+  -- unanchored intervals (open lower bound — backdated claims) overlap
+  -- everything by construction; they are confirm-queue material, not flags
+  -- (false-positive doctrine: prefer a missed borderline flag over crying wolf)
+  and not lower_inf(a.valid_during)
+  and not lower_inf(b.valid_during)
   and a.status not in ('rejected','retconned')
   and b.status not in ('rejected','retconned');
 
@@ -68,25 +73,31 @@ where a.world_id = :world_id and b.world_id = :world_id
 -- (at or before they know it) with another character who already knew it.
 -- v0 proxy for "the reveal of HOW they know never lands" — see answer-key P2.
 -- ============================================================
+-- Anchor = where the knowledge is REVEALED (the establishing scene), not the
+-- interval's lower bound: a backdated knows ("I've known since...") has an open
+-- lower bound, and anchoring on lower() would make unsourced backdated claims
+-- structurally unflaggable — they are the prime case (answer-key P2).
 select
   'premature_knowledge',
   'critical',
   format('%s knows "%s" (pos %s) with no on-screen source — never present with a prior knower of it.',
-         e.name, k.object_value, lower(k.valid_during)),
+         e.name, k.object_value, coalesce(lower(k.valid_during), s_use.story_position)),
   k.established_in_scene,
   k.id, null::bigint
 from assertions k
 join entities e on e.id = k.subject_id
+join scenes s_use on s_use.id = k.established_in_scene
 where k.world_id = :world_id
   and k.predicate = 'knows'
   and k.object_value is not null
   and k.status not in ('rejected','retconned')
-  -- not the originator: this fact was first known strictly earlier by someone
+  -- not the originator: the same fact was revealed strictly earlier by someone
   -- (object_value comparison is normalized: lowercase, alphanumerics only —
   --  extraction reuses canonical handles, this absorbs residual punct/case drift)
-  and lower(k.valid_during) > (
-    select min(lower(k0.valid_during))
+  and coalesce(lower(k.valid_during), s_use.story_position) > (
+    select min(coalesce(lower(k0.valid_during), s0.story_position))
     from assertions k0
+    join scenes s0 on s0.id = k0.established_in_scene
     where k0.world_id = k.world_id
       and k0.predicate = 'knows'
       and regexp_replace(lower(k0.object_value), '[^a-z0-9 ]', '', 'g')
@@ -101,7 +112,7 @@ where k.world_id = :world_id
     join scene_presence sp_other on sp_other.scene_id = sp_self.scene_id
     join assertions k2           on k2.subject_id = sp_other.entity_id
     where sp_self.entity_id = k.subject_id
-      and sc.story_position <= lower(k.valid_during)
+      and sc.story_position <= coalesce(lower(k.valid_during), s_use.story_position)
       and k2.predicate = 'knows'
       and regexp_replace(lower(k2.object_value), '[^a-z0-9 ]', '', 'g')
         = regexp_replace(lower(k.object_value),  '[^a-z0-9 ]', '', 'g')

@@ -242,6 +242,21 @@ mitigated in the prompt. Tuning lesson encoded in `docs/extraction.md`'s spirit:
 free-text `object_value` must be SHORT CANONICAL HANDLES reused verbatim across
 scenes — that's what makes cross-character knowledge checks joinable.
 
+## Hole-finder (Phase 1 — "questions your world doc doesn't answer", SPEC R8)
+
+The `holes` step runs deterministic gap queries (`db/holes.sql`) over the loaded
+graph and emits a report of *questions*, never answers (D1): unestablished
+references, open threads (setup without payoff), unexplained knowledge, and
+unconfirmed beliefs — each citing where the gap is. It's the Test-C onboarding
+artifact. Output is a text report and a self-contained HTML page a writer can open.
+
+```bash
+export CANON_DB_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres
+python -m canon holes --world greyharbor --html out/holes.html --open
+#   → e.g. "Who or what is Danny? [E101/sc4]", "How does Cole know the ledger
+#     location? [E102/sc1]" — gaps surfaced for the writer to fill, with citations
+```
+
 ## Rights guard
 
 This is a public repo and Canon's standing rule is **only rights-clean, original

@@ -15,6 +15,7 @@ from pathlib import Path
 from . import ask as ask_mod
 from . import check as check_mod
 from . import extract as extract_mod
+from . import holes as holes_mod
 from . import ingest as ingest_mod
 from . import resolve as resolve_mod
 from . import store as store_mod
@@ -397,6 +398,54 @@ def cmd_ask(args: argparse.Namespace) -> int:
     return 0 if result["status"] in ("answered", "no_support") else 2
 
 
+def cmd_holes(args: argparse.Namespace) -> int:
+    from pathlib import Path as _Path
+
+    db_url = ingest_mod.resolve_db_url(args.db_url)
+    if db_url is None:
+        print("error: holes requires a database (set CANON_DB_URL / DATABASE_URL / --db-url)",
+              file=sys.stderr)
+        return 2
+    try:
+        conn = ingest_mod.connect(db_url)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM worlds WHERE name = %s", (args.world,))
+        row = cur.fetchone()
+        conn.rollback()
+        if not row:
+            print(f"error: world '{args.world}' not found — load it first.", file=sys.stderr)
+            return 1
+        holes_sql = _Path(args.holes).read_text(encoding="utf-8")
+        found, errors = holes_mod.run_holes(conn, row[0], holes_sql)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    for err in errors:
+        print(f"warning: hole query failed: {err}", file=sys.stderr)
+    print(holes_mod.render_text(args.world, found))
+
+    if args.html:
+        out = _Path(args.html)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(holes_mod.render_html(args.world, found, args.stamp or ""), encoding="utf-8")
+        print(f"\nwrote {out}  ({len(found)} question(s))")
+        if args.open:
+            import subprocess
+            opener = "open" if sys.platform == "darwin" else "xdg-open"
+            try:
+                subprocess.run([opener, str(out)], check=False)
+            except FileNotFoundError:
+                print(f"(could not auto-open; open {out} manually)", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="canon", description="Canon AI CLI")
     sub = p.add_subparsers(dest="command", required=True)
@@ -510,6 +559,17 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("--show-sql", action="store_true", help="print the executed SQL")
     ask.add_argument("--dry-run", action="store_true", help="print the prompts; no DB, no API")
     ask.set_defaults(func=cmd_ask)
+
+    hol = sub.add_parser(
+        "holes", help="hole-finder: questions your world doc doesn't answer (gaps over the graph)",
+    )
+    hol.add_argument("--world", required=True, help="world name (must be loaded)")
+    hol.add_argument("--db-url", default=None, help="Postgres URL (else CANON_DB_URL / DATABASE_URL)")
+    hol.add_argument("--holes", default="db/holes.sql", help="path to the hole queries")
+    hol.add_argument("--html", default=None, help="also write a self-contained HTML report here")
+    hol.add_argument("--open", action="store_true", help="open the HTML report in a browser")
+    hol.add_argument("--stamp", default=None, help="optional date stamp shown in the report")
+    hol.set_defaults(func=cmd_holes)
     return p
 
 

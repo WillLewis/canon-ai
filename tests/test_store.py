@@ -94,6 +94,7 @@ def _state():
             _entity(3, "Cole", "character", ["Cole"]),
             _entity(4, "Chapel on the Point", "location", ["Chapel on the Point", "chapel"]),
             _entity(5, "Leather Ledger", "object", ["Leather Ledger", "ledger"]),
+            _entity(6, "Harbormaster's Office", "location", ["Harbormaster's Office"]),
         ],
         "assertions": [
             _assn("Mara", "cannot", 1, object_value="drive"),
@@ -169,10 +170,10 @@ def test_loader_inserts_entities_aliases_and_counts():
     r = store.store_state(conn, "greyharbor", _state())
     assert conn.committed
     assert r["world_id"] == 7
-    assert r["entities"] == 5
-    assert len(_calls(conn.cur, "insert into entities")) == 5
-    # 5 entities: Mara/Tobias/Cole 1 alias each, Chapel/Ledger 2 each = 7
-    assert r["aliases"] == 7 and len(_calls(conn.cur, "insert into aliases")) == 7
+    assert r["entities"] == 6
+    assert len(_calls(conn.cur, "insert into entities")) == 6
+    # Mara/Tobias/Cole/Office 1 alias each, Chapel/Ledger 2 each = 8
+    assert r["aliases"] == 8 and len(_calls(conn.cur, "insert into aliases")) == 8
     assert r["assertions"] == 5 and r["skipped"] == 0
 
 
@@ -183,11 +184,11 @@ def test_scene_presence_includes_characters_and_setting_location():
     pairs = {(p[1][0], p[1][1]) for p in sp}
     # characters: Mara(=eid1),Tobias(=eid2) at scene 101; Tobias at scene 109
     assert (101, 1) in pairs and (101, 2) in pairs and (109, 2) in pairs
-    # setting location chapel(=eid4) added at the three chapel scenes (103/106/108)
+    # setting locations resolved from slugs: chapel(=eid4) at 103/106/108,
+    # office(=eid6) at 101/105/109
     assert (103, 4) in pairs and (106, 4) in pairs and (108, 4) in pairs
-    # office scenes get no location entity
-    assert not any(scene == 105 for scene, _ in pairs)
-    assert r["scene_presence"] == 6
+    assert (101, 6) in pairs and (105, 6) in pairs and (109, 6) in pairs
+    assert r["scene_presence"] == 9
 
 
 def test_assertion_ranges_objects_and_status():
@@ -230,9 +231,9 @@ def test_reset_tears_down_world_graph_first():
 def test_located_at_movement_closes_previous_open_interval():
     state = _state()
     state["assertions"] = [
-        _assn("Mara", "located_at", 1, object_entity="Chapel on the Point"),
-        _assn("Mara", "located_at", 3, object_entity="Chapel on the Point"),  # moves (same loc ok)
-        _assn("Mara", "located_at", 8, object_entity="Chapel on the Point"),
+        _assn("Mara", "located_at", 1, object_entity="Harbormaster's Office"),
+        _assn("Mara", "located_at", 3, object_entity="Chapel on the Point"),   # move
+        _assn("Mara", "located_at", 8, object_entity="Harbormaster's Office"),  # move back
     ]
     conn = FakeConn(world_id=7, scenes=_SCENES)
     r = store.store_state(conn, "greyharbor", state)
@@ -244,12 +245,27 @@ def test_located_at_movement_closes_previous_open_interval():
     assert r["character_locations"] == 3
 
 
+def test_backdated_located_at_closed_by_next_move():
+    state = _state()
+    state["assertions"] = [
+        # backdated: ledger has been in the chapel since before the story -> (,)
+        _assn("Leather Ledger", "located_at", 3, object_entity="Chapel on the Point",
+              starts_here=False),
+        # taken to the office at pos 8 -> previous must close to (,8)
+        _assn("Leather Ledger", "located_at", 8, object_entity="Harbormaster's Office"),
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    store.store_state(conn, "greyharbor", state)
+    updates = [c for c in conn.cur.calls if c[0].startswith("UPDATE assertions")]
+    assert [(u[1][0], u[1][1]) for u in updates] == [(None, 8)]   # (,) -> (,8)
+
+
 def test_located_at_same_position_conflict_skips_sync_not_load():
     state = _state()
     state["assertions"] = [
         _assn("Mara", "located_at", 3, object_entity="Chapel on the Point"),
-        _assn("Mara", "located_at", 3, object_entity="Chapel on the Point"),  # two places at pos 3
-        _assn("Mara", "located_at", 8, object_entity="Chapel on the Point"),  # later move
+        _assn("Mara", "located_at", 3, object_entity="Harbormaster's Office"),  # two places at pos 3
+        _assn("Mara", "located_at", 8, object_entity="Harbormaster's Office"),  # later move
     ]
     conn = FakeConn(world_id=7, scenes=_SCENES)
     r = store.store_state(conn, "greyharbor", state)
@@ -259,6 +275,23 @@ def test_located_at_same_position_conflict_skips_sync_not_load():
     assert [(u[1][0], u[1][1]) for u in updates] == [(3, 8)]  # first row closed by the pos-8 move
 
 
+def test_same_location_reaffirmation_dedupes():
+    state = _state()
+    state["assertions"] = [
+        _assn("Leather Ledger", "located_at", 3, object_entity="Chapel on the Point",
+              starts_here=False),                                              # (,)
+        _assn("Leather Ledger", "located_at", 8, object_entity="Chapel on the Point",
+              starts_here=False),                                              # "still there" — dedupe
+        _assn("Leather Ledger", "located_at", 9, object_entity="Harbormaster's Office"),  # real move
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    r = store.store_state(conn, "greyharbor", state)
+    assert r["deduped"] == 1
+    assert r["assertions"] == 2                  # reaffirmation row never inserted
+    updates = [c for c in conn.cur.calls if c[0].startswith("UPDATE assertions")]
+    assert [(u[1][0], u[1][1]) for u in updates] == [(None, 9)]  # (,) closed by the move
+
+
 def test_skips_assertion_with_unknown_subject():
     state = _state()
     state["assertions"].append(_assn("Ghost", "knows", 3, object_value="x"))
@@ -266,6 +299,37 @@ def test_skips_assertion_with_unknown_subject():
     r = store.store_state(conn, "greyharbor", state)
     assert r["skipped"] == 1
     assert r["assertions"] == 5                        # the 5 known-subject ones
+
+
+def test_backdated_bounded_continuation_anchors_to_prior_same_location_start():
+    # 'locked in the chapel until pos 9', restated later as a backdated + bounded claim:
+    # its open lower bound is anchored to the prior chapel stay's start (pos 3) so it
+    # becomes a real interval the presence_conflict scan can use. (answer-key P7 shape)
+    state = _state()
+    state["assertions"] = [
+        _assn("Mara", "located_at", 3, object_entity="Chapel on the Point"),        # [3,)
+        _assn("Mara", "located_at", 5, object_entity="Harbormaster's Office"),       # move -> chapel [3,5)
+        _assn("Mara", "located_at", 8, object_entity="Chapel on the Point",
+              starts_here=False, ends_here=True),                                    # (,9) -> anchored [3,9)
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    store.store_state(conn, "greyharbor", state)
+    backdated = _calls(conn.cur, "insert into assertions")[-1][1]   # the third located_at row
+    assert backdated[6] == 3 and backdated[7] == 9                  # [3,9): lower anchored, not None
+
+
+def test_backdated_bounded_without_prior_same_location_stays_open():
+    # no prior stay at this location -> nothing to anchor to -> lower stays open (no over-reach).
+    state = _state()
+    state["assertions"] = [
+        _assn("Mara", "located_at", 5, object_entity="Harbormaster's Office"),       # [5,)
+        _assn("Mara", "located_at", 8, object_entity="Chapel on the Point",
+              starts_here=False, ends_here=True),                                    # (,9): no prior chapel
+    ]
+    conn = FakeConn(world_id=7, scenes=_SCENES)
+    store.store_state(conn, "greyharbor", state)
+    backdated = _calls(conn.cur, "insert into assertions")[-1][1]
+    assert backdated[6] is None and backdated[7] == 9              # (,9): unchanged
 
 
 if __name__ == "__main__":

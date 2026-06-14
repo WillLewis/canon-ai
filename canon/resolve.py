@@ -485,13 +485,16 @@ def resolve_candidates(candidates, *, world: str = "", client=None, model: str =
 
     presence = _build_scene_presence(candidates, surface_to_entity)
 
-    # A character who is referenced but never present in any scene is not yet
-    # established in canon (the answer-key's own definition of provisional —
-    # e.g. Danny: talked about, never appears). Feeds the dangling_reference
-    # check. Marked before assertions are built so their flags snapshot it.
+    # A person referenced but never present in any scene is not yet established
+    # in canon (the answer-key's own definition of provisional — e.g. Danny:
+    # talked about, never appears). Covers 'character' AND 'other' (the catch-all
+    # kind, where mis-classified people like Danny land), but not location/object
+    # (places and things are established by being a setting or being used, not by
+    # appearing in scene_presence). Feeds the dangling_reference check; marked
+    # before assertions are built so their flags snapshot it.
     present_norms = {_norm(n) for p in presence for n in p["entities"]}
     for e in reg.entities:
-        if e.kind == "character" and _norm(e.name) not in present_norms:
+        if e.kind in ("character", "other") and _norm(e.name) not in present_norms:
             e.provisional = True
 
     assertions = _build_resolved_assertions(candidates, surface_to_entity)
@@ -515,7 +518,10 @@ def _build_resolved_assertions(candidates, surface_to_entity) -> list[dict]:
                 "subject": subj.name if subj else a.get("subject"),
                 "predicate": a.get("predicate"),
                 "object_entity": obj.name if obj else None,
-                "object_value": a.get("object_value"),
+                # v0 collapse: object_fact_ref is free-text just like object_value
+                # (true assertion-id epistemic refs are post-v0); fold it in so
+                # checks and the eval contract see one fact-handle field
+                "object_value": a.get("object_value") or a.get("object_fact_ref"),
                 "polarity": a.get("polarity", True),
                 "starts_here": a.get("starts_here", True),
                 "ends_here": a.get("ends_here", False),

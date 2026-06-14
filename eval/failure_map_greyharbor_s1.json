@@ -1,0 +1,19 @@
+{
+  "_comment": "DIAGNOSTIC ONLY — consumed by bench/failure_modes.py to attribute a MISSED planted error to the architectural layer that dropped the signal. This file does NOT affect recall/FP/trap scoring (that is eval/run_eval.py + bench/scorer.py); it only explains WHY a miss happened, so it cannot overfit the detector. Field meanings: requires_all = expected-assertion ids (from expected_greyharbor_s1.json) that must be extracted + resolved + correct for the check to even be able to fire. requires_prior_any = for premature_knowledge, the earlier knower(s); if none survive, the asymmetry is structurally undetectable (an extraction miss on the source side). violation_keyword = for capability_violation, the positive act that must be extracted to conflict with the 'cannot' rule. presence_dependent = the check needs the entity in scene_presence at the violating scene (objects/locations are only present via the scene slug today). downstream = the layer to attribute when ALL required data IS present and correct yet the check still did not fire.",
+  "P1":  {"check": "dead_speaker",            "requires_all": ["A2"],  "presence_dependent": true, "downstream": "store_presence_modeling"},
+  "P2":  {"check": "premature_knowledge",     "requires_all": ["A10"], "requires_prior_any": ["A4"], "downstream": "sql_check_miss"},
+  "P3":  {"check": "destroyed_location_use",  "requires_all": ["A7"],  "presence_dependent": true, "downstream": "store_presence_modeling"},
+  "P4":  {"check": "capability_violation",    "requires_all": ["A1"],  "violation_keyword": "drive", "downstream": "sql_check_miss"},
+  "P5":  {"check": "dead_speaker",            "requires_all": ["A2"],  "presence_dependent": true, "downstream": "store_presence_modeling"},
+  "P6":  {"check": "presence_conflict",       "requires_all": ["A33", "A34"], "downstream": "store_range_modeling"},
+  "P7":  {"check": "presence_conflict",       "requires_all": ["A35", "A36"], "downstream": "store_range_modeling"},
+  "P8":  {"check": "premature_knowledge",     "requires_all": ["A38"], "requires_prior_any": ["A22", "A23"], "downstream": "sql_check_miss"},
+  "P9":  {"check": "premature_knowledge",     "requires_all": ["A39"], "requires_prior_any": ["A17", "A18"], "downstream": "sql_check_miss"},
+  "P10": {"check": "destroyed_location_use",  "requires_all": ["A26"], "presence_dependent": true, "downstream": "store_presence_modeling"},
+  "P11": {"check": "capability_violation",    "requires_all": ["A24"], "violation_keyword": "swim", "downstream": "sql_check_miss"},
+  "P12": {"check": "destroyed_location_use",  "requires_all": ["A30"], "presence_dependent": true, "downstream": "store_presence_modeling"},
+  "P13": {"check": "capability_violation",    "requires_all": ["A29"], "violation_keyword": "right hand", "downstream": "sql_check_miss"},
+  "P14": {"check": "dead_speaker",            "requires_all": ["A32"], "presence_dependent": true, "downstream": "store_presence_modeling"},
+  "N3":  {"check": "dangling_reference",      "requires_all": [], "downstream": "sql_check_miss"},
+  "N4":  {"check": "idle_setup",              "requires_all": ["A28"], "downstream": "sql_check_miss"}
+}

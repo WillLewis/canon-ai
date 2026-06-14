@@ -1,0 +1,1042 @@
+{
+  "episodes": 8,
+  "model": "claude-opus-4-8",
+  "canon": {
+    "cases": [
+      {
+        "id": "P1",
+        "kind": "planted",
+        "check": "dead_speaker",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E102/sc3",
+        "must_mention": [
+          "Tobias"
+        ]
+      },
+      {
+        "id": "P2",
+        "kind": "planted",
+        "check": "premature_knowledge",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E102/sc1",
+        "must_mention": [
+          "Cole"
+        ]
+      },
+      {
+        "id": "P3",
+        "kind": "planted",
+        "check": "destroyed_location_use",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E102/sc2",
+        "must_mention": [
+          "Chapel"
+        ]
+      },
+      {
+        "id": "P4",
+        "kind": "planted",
+        "check": "capability_violation",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E102/sc4",
+        "must_mention": [
+          "Mara",
+          "drive"
+        ]
+      },
+      {
+        "id": "P5",
+        "kind": "planted",
+        "check": "dead_speaker",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E105/sc3",
+        "must_mention": [
+          "Tobias"
+        ]
+      },
+      {
+        "id": "P6",
+        "kind": "planted",
+        "check": "presence_conflict",
+        "expected": "flag",
+        "flagged": false,
+        "correct": false,
+        "where": "E105/sc5",
+        "must_mention": [
+          "Danny",
+          "Blue Gull",
+          "Courthouse"
+        ]
+      },
+      {
+        "id": "P7",
+        "kind": "planted",
+        "check": "presence_conflict",
+        "expected": "flag",
+        "flagged": false,
+        "correct": false,
+        "where": "E106/sc2",
+        "must_mention": [
+          "Rafi",
+          "Weather",
+          "Kitchen"
+        ]
+      },
+      {
+        "id": "P8",
+        "kind": "planted",
+        "check": "premature_knowledge",
+        "expected": "flag",
+        "flagged": false,
+        "correct": false,
+        "where": "E106/sc3",
+        "must_mention": [
+          "Hale",
+          "blue hook"
+        ]
+      },
+      {
+        "id": "P9",
+        "kind": "planted",
+        "check": "premature_knowledge",
+        "expected": "flag",
+        "flagged": false,
+        "correct": false,
+        "where": "E107/sc2",
+        "must_mention": [
+          "Jory",
+          "stove"
+        ]
+      },
+      {
+        "id": "P10",
+        "kind": "planted",
+        "check": "destroyed_location_use",
+        "expected": "flag",
+        "flagged": false,
+        "correct": false,
+        "where": "E107/sc3",
+        "must_mention": [
+          "Fog Bell Buoy"
+        ]
+      },
+      {
+        "id": "P11",
+        "kind": "planted",
+        "check": "capability_violation",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E107/sc4",
+        "must_mention": [
+          "Danny",
+          "swim"
+        ]
+      },
+      {
+        "id": "P12",
+        "kind": "planted",
+        "check": "destroyed_location_use",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E108/sc2",
+        "must_mention": [
+          "Salt House"
+        ]
+      },
+      {
+        "id": "P13",
+        "kind": "planted",
+        "check": "capability_violation",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E108/sc3",
+        "must_mention": [
+          "Edda",
+          "right hand"
+        ]
+      },
+      {
+        "id": "P14",
+        "kind": "planted",
+        "check": "dead_speaker",
+        "expected": "flag",
+        "flagged": true,
+        "correct": true,
+        "where": "E108/sc4",
+        "must_mention": [
+          "Cole"
+        ]
+      },
+      {
+        "id": "T1",
+        "kind": "trap",
+        "check": "premature_knowledge",
+        "expected": "no-flag",
+        "flagged": false,
+        "correct": true,
+        "where": "E102/sc2",
+        "description": "Mara echoing 'Forgive me the arithmetic' must not produce a premature_knowledge finding mentioning both Mara and arithmetic"
+      },
+      {
+        "id": "T2",
+        "kind": "trap",
+        "check": "*",
+        "expected": "no-flag",
+        "flagged": false,
+        "correct": true,
+        "where": "E101/sc2",
+        "description": "Edda's E101 claims are believes, not knows; no finding should treat them as world-fact violations"
+      },
+      {
+        "id": "T3",
+        "kind": "trap",
+        "check": "dead_speaker",
+        "expected": "no-flag",
+        "flagged": false,
+        "correct": true,
+        "where": "E103/sc2",
+        "description": "Edda addressing Tobias's cap is a grief ritual, not Tobias appearing alive"
+      },
+      {
+        "id": "T4",
+        "kind": "trap",
+        "check": "dead_speaker",
+        "expected": "no-flag",
+        "flagged": false,
+        "correct": true,
+        "where": "E105/sc6",
+        "description": "Cole's post-death voice is playback from Lila's recorder, not Cole present after death"
+      },
+      {
+        "id": "T5",
+        "kind": "trap",
+        "check": "*",
+        "expected": "no-flag",
+        "flagged": false,
+        "correct": true,
+        "where": "E108/sc6",
+        "description": "Danny saying he died in the skiff is metaphorical survivor language, not a literal death"
+      }
+    ],
+    "summary": {
+      "recall": 0.643,
+      "planted_found": 9,
+      "planted_total": 14,
+      "missed": [
+        "P6",
+        "P7",
+        "P8",
+        "P9",
+        "P10"
+      ],
+      "false_positives": 3,
+      "fp_per_episode": 0.38,
+      "fp_samples": [
+        "Mara Voss knows \"cole payment\" (pos 20) with no on-screen source \u2014 never present with a pr",
+        "Rafi Orso: canon says cannot \"leave weather station\" (since pos 36), but a conflicting ass",
+        "Danny Voss: canon says cannot \"swim\" (since pos 16), but a conflicting assertion appears a"
+      ],
+      "traps_respected": 5,
+      "traps_total": 5,
+      "trap_violations": []
+    }
+  },
+  "claude_runs": [
+    {
+      "cases": [
+        {
+          "id": "P1",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E102/sc3",
+          "must_mention": [
+            "Tobias"
+          ]
+        },
+        {
+          "id": "P2",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E102/sc1",
+          "must_mention": [
+            "Cole"
+          ]
+        },
+        {
+          "id": "P3",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E102/sc2",
+          "must_mention": [
+            "Chapel"
+          ]
+        },
+        {
+          "id": "P4",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E102/sc4",
+          "must_mention": [
+            "Mara",
+            "drive"
+          ]
+        },
+        {
+          "id": "P5",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E105/sc3",
+          "must_mention": [
+            "Tobias"
+          ]
+        },
+        {
+          "id": "P6",
+          "kind": "planted",
+          "check": "presence_conflict",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E105/sc5",
+          "must_mention": [
+            "Danny",
+            "Blue Gull",
+            "Courthouse"
+          ]
+        },
+        {
+          "id": "P7",
+          "kind": "planted",
+          "check": "presence_conflict",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E106/sc2",
+          "must_mention": [
+            "Rafi",
+            "Weather",
+            "Kitchen"
+          ]
+        },
+        {
+          "id": "P8",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E106/sc3",
+          "must_mention": [
+            "Hale",
+            "blue hook"
+          ]
+        },
+        {
+          "id": "P9",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E107/sc2",
+          "must_mention": [
+            "Jory",
+            "stove"
+          ]
+        },
+        {
+          "id": "P10",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E107/sc3",
+          "must_mention": [
+            "Fog Bell Buoy"
+          ]
+        },
+        {
+          "id": "P11",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E107/sc4",
+          "must_mention": [
+            "Danny",
+            "swim"
+          ]
+        },
+        {
+          "id": "P12",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc2",
+          "must_mention": [
+            "Salt House"
+          ]
+        },
+        {
+          "id": "P13",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc3",
+          "must_mention": [
+            "Edda",
+            "right hand"
+          ]
+        },
+        {
+          "id": "P14",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc4",
+          "must_mention": [
+            "Cole"
+          ]
+        },
+        {
+          "id": "T1",
+          "kind": "trap",
+          "check": "premature_knowledge",
+          "expected": "no-flag",
+          "flagged": true,
+          "correct": false,
+          "where": "E102/sc2",
+          "description": "Mara echoing 'Forgive me the arithmetic' must not produce a premature_knowledge finding mentioning both Mara and arithmetic"
+        },
+        {
+          "id": "T2",
+          "kind": "trap",
+          "check": "*",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E101/sc2",
+          "description": "Edda's E101 claims are believes, not knows; no finding should treat them as world-fact violations"
+        },
+        {
+          "id": "T3",
+          "kind": "trap",
+          "check": "dead_speaker",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E103/sc2",
+          "description": "Edda addressing Tobias's cap is a grief ritual, not Tobias appearing alive"
+        },
+        {
+          "id": "T4",
+          "kind": "trap",
+          "check": "dead_speaker",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E105/sc6",
+          "description": "Cole's post-death voice is playback from Lila's recorder, not Cole present after death"
+        },
+        {
+          "id": "T5",
+          "kind": "trap",
+          "check": "*",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E108/sc6",
+          "description": "Danny saying he died in the skiff is metaphorical survivor language, not a literal death"
+        }
+      ],
+      "summary": {
+        "recall": 0.643,
+        "planted_found": 9,
+        "planted_total": 14,
+        "missed": [
+          "P1",
+          "P2",
+          "P5",
+          "P8",
+          "P9"
+        ],
+        "false_positives": 1,
+        "fp_per_episode": 0.12,
+        "fp_samples": [
+          "Mara Voss: Mara murmurs 'Forgive me the arithmetic' while prying up the chapel floor stone"
+        ],
+        "traps_respected": 4,
+        "traps_total": 5,
+        "trap_violations": [
+          "T1"
+        ]
+      }
+    },
+    {
+      "cases": [
+        {
+          "id": "P1",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E102/sc3",
+          "must_mention": [
+            "Tobias"
+          ]
+        },
+        {
+          "id": "P2",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E102/sc1",
+          "must_mention": [
+            "Cole"
+          ]
+        },
+        {
+          "id": "P3",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E102/sc2",
+          "must_mention": [
+            "Chapel"
+          ]
+        },
+        {
+          "id": "P4",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E102/sc4",
+          "must_mention": [
+            "Mara",
+            "drive"
+          ]
+        },
+        {
+          "id": "P5",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E105/sc3",
+          "must_mention": [
+            "Tobias"
+          ]
+        },
+        {
+          "id": "P6",
+          "kind": "planted",
+          "check": "presence_conflict",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E105/sc5",
+          "must_mention": [
+            "Danny",
+            "Blue Gull",
+            "Courthouse"
+          ]
+        },
+        {
+          "id": "P7",
+          "kind": "planted",
+          "check": "presence_conflict",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E106/sc2",
+          "must_mention": [
+            "Rafi",
+            "Weather",
+            "Kitchen"
+          ]
+        },
+        {
+          "id": "P8",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E106/sc3",
+          "must_mention": [
+            "Hale",
+            "blue hook"
+          ]
+        },
+        {
+          "id": "P9",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E107/sc2",
+          "must_mention": [
+            "Jory",
+            "stove"
+          ]
+        },
+        {
+          "id": "P10",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E107/sc3",
+          "must_mention": [
+            "Fog Bell Buoy"
+          ]
+        },
+        {
+          "id": "P11",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E107/sc4",
+          "must_mention": [
+            "Danny",
+            "swim"
+          ]
+        },
+        {
+          "id": "P12",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc2",
+          "must_mention": [
+            "Salt House"
+          ]
+        },
+        {
+          "id": "P13",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc3",
+          "must_mention": [
+            "Edda",
+            "right hand"
+          ]
+        },
+        {
+          "id": "P14",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc4",
+          "must_mention": [
+            "Cole"
+          ]
+        },
+        {
+          "id": "T1",
+          "kind": "trap",
+          "check": "premature_knowledge",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E102/sc2",
+          "description": "Mara echoing 'Forgive me the arithmetic' must not produce a premature_knowledge finding mentioning both Mara and arithmetic"
+        },
+        {
+          "id": "T2",
+          "kind": "trap",
+          "check": "*",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E101/sc2",
+          "description": "Edda's E101 claims are believes, not knows; no finding should treat them as world-fact violations"
+        },
+        {
+          "id": "T3",
+          "kind": "trap",
+          "check": "dead_speaker",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E103/sc2",
+          "description": "Edda addressing Tobias's cap is a grief ritual, not Tobias appearing alive"
+        },
+        {
+          "id": "T4",
+          "kind": "trap",
+          "check": "dead_speaker",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E105/sc6",
+          "description": "Cole's post-death voice is playback from Lila's recorder, not Cole present after death"
+        },
+        {
+          "id": "T5",
+          "kind": "trap",
+          "check": "*",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E108/sc6",
+          "description": "Danny saying he died in the skiff is metaphorical survivor language, not a literal death"
+        }
+      ],
+      "summary": {
+        "recall": 0.643,
+        "planted_found": 9,
+        "planted_total": 14,
+        "missed": [
+          "P2",
+          "P6",
+          "P7",
+          "P8",
+          "P9"
+        ],
+        "false_positives": 1,
+        "fp_per_episode": 0.12,
+        "fp_samples": [
+          "Danny Voss: Danny stands beside Mara at the courthouse archive map table, but he was chain"
+        ],
+        "traps_respected": 5,
+        "traps_total": 5,
+        "trap_violations": []
+      }
+    },
+    {
+      "cases": [
+        {
+          "id": "P1",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E102/sc3",
+          "must_mention": [
+            "Tobias"
+          ]
+        },
+        {
+          "id": "P2",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E102/sc1",
+          "must_mention": [
+            "Cole"
+          ]
+        },
+        {
+          "id": "P3",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E102/sc2",
+          "must_mention": [
+            "Chapel"
+          ]
+        },
+        {
+          "id": "P4",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E102/sc4",
+          "must_mention": [
+            "Mara",
+            "drive"
+          ]
+        },
+        {
+          "id": "P5",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E105/sc3",
+          "must_mention": [
+            "Tobias"
+          ]
+        },
+        {
+          "id": "P6",
+          "kind": "planted",
+          "check": "presence_conflict",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E105/sc5",
+          "must_mention": [
+            "Danny",
+            "Blue Gull",
+            "Courthouse"
+          ]
+        },
+        {
+          "id": "P7",
+          "kind": "planted",
+          "check": "presence_conflict",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E106/sc2",
+          "must_mention": [
+            "Rafi",
+            "Weather",
+            "Kitchen"
+          ]
+        },
+        {
+          "id": "P8",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E106/sc3",
+          "must_mention": [
+            "Hale",
+            "blue hook"
+          ]
+        },
+        {
+          "id": "P9",
+          "kind": "planted",
+          "check": "premature_knowledge",
+          "expected": "flag",
+          "flagged": false,
+          "correct": false,
+          "where": "E107/sc2",
+          "must_mention": [
+            "Jory",
+            "stove"
+          ]
+        },
+        {
+          "id": "P10",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E107/sc3",
+          "must_mention": [
+            "Fog Bell Buoy"
+          ]
+        },
+        {
+          "id": "P11",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E107/sc4",
+          "must_mention": [
+            "Danny",
+            "swim"
+          ]
+        },
+        {
+          "id": "P12",
+          "kind": "planted",
+          "check": "destroyed_location_use",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc2",
+          "must_mention": [
+            "Salt House"
+          ]
+        },
+        {
+          "id": "P13",
+          "kind": "planted",
+          "check": "capability_violation",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc3",
+          "must_mention": [
+            "Edda",
+            "right hand"
+          ]
+        },
+        {
+          "id": "P14",
+          "kind": "planted",
+          "check": "dead_speaker",
+          "expected": "flag",
+          "flagged": true,
+          "correct": true,
+          "where": "E108/sc4",
+          "must_mention": [
+            "Cole"
+          ]
+        },
+        {
+          "id": "T1",
+          "kind": "trap",
+          "check": "premature_knowledge",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E102/sc2",
+          "description": "Mara echoing 'Forgive me the arithmetic' must not produce a premature_knowledge finding mentioning both Mara and arithmetic"
+        },
+        {
+          "id": "T2",
+          "kind": "trap",
+          "check": "*",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E101/sc2",
+          "description": "Edda's E101 claims are believes, not knows; no finding should treat them as world-fact violations"
+        },
+        {
+          "id": "T3",
+          "kind": "trap",
+          "check": "dead_speaker",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E103/sc2",
+          "description": "Edda addressing Tobias's cap is a grief ritual, not Tobias appearing alive"
+        },
+        {
+          "id": "T4",
+          "kind": "trap",
+          "check": "dead_speaker",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E105/sc6",
+          "description": "Cole's post-death voice is playback from Lila's recorder, not Cole present after death"
+        },
+        {
+          "id": "T5",
+          "kind": "trap",
+          "check": "*",
+          "expected": "no-flag",
+          "flagged": false,
+          "correct": true,
+          "where": "E108/sc6",
+          "description": "Danny saying he died in the skiff is metaphorical survivor language, not a literal death"
+        }
+      ],
+      "summary": {
+        "recall": 0.643,
+        "planted_found": 9,
+        "planted_total": 14,
+        "missed": [
+          "P2",
+          "P6",
+          "P7",
+          "P8",
+          "P9"
+        ],
+        "false_positives": 0,
+        "fp_per_episode": 0.0,
+        "fp_samples": [],
+        "traps_respected": 5,
+        "traps_total": 5,
+        "trap_violations": []
+      }
+    }
+  ],
+  "claude_aggregate": {
+    "runs": 3,
+    "recall_mean": 0.643,
+    "recall_every_run": 0.5,
+    "caught_every_run": [
+      "P10",
+      "P11",
+      "P12",
+      "P13",
+      "P14",
+      "P3",
+      "P4"
+    ],
+    "flaky": [
+      "P1",
+      "P5",
+      "P6",
+      "P7"
+    ],
+    "never_caught": [
+      "P2",
+      "P8",
+      "P9"
+    ],
+    "fp_per_episode_mean": 0.08,
+    "trap_violations_any": [
+      "T1"
+    ]
+  },
+  "markdown": "| metric | Canon | chatbot (Claude) |\n|---|---|---|\n| planted errors found | **9/14** (64%) | 64% avg, 50% every run |\n| false positives / episode | 0.38 | 0.08 |\n| traps respected | 5/5 | violated T1 |\n| run-to-run consistency | deterministic (identical every run) | flaky on 4 error(s): P1,P5,P6,P7 |\n| missed | P6,P7,P8,P9,P10 | never caught: P2,P8,P9 |"
+}
