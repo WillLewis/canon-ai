@@ -15,7 +15,9 @@
   <nav class="mainnav">
     <a href="/worlds/{{ world.id }}/report" class="{{ 'on' if nav=='report' }}">Report</a>
     <a href="/worlds/{{ world.id }}/script" class="{{ 'on' if nav=='script' }}">Script</a>
-    <a href="/worlds/{{ world.id }}/confirm" class="{{ 'on' if nav=='confirm' }}">Verify{% if draft_count %} ({{ draft_count }}){% endif %}</a>
+    {% set verify_n = draft_count if draft_count is defined and draft_count
+                      else (drafts|length if drafts is defined else 0) %}
+    <a href="/worlds/{{ world.id }}/confirm" class="{{ 'on' if nav=='confirm' }}">Verify{% if verify_n %} ({{ verify_n }}){% endif %}</a>
     <a href="/worlds/{{ world.id }}/rules" class="{{ 'on' if nav=='rules' }}">Rules</a>
     <a href="/entities?world={{ world.name|urlencode }}" class="{{ 'on' if nav in ('entities', 'assertions') }}">Bible</a>
     <a href="/scenes?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='scenes' }}">Scenes</a>

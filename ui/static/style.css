@@ -397,7 +397,10 @@ details.note.kbd-focus { outline: 2px solid var(--nonphoto); outline-offset: 1px
 /* ---- script split view ---- */
 .split { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
 @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
-.script-work { margin: 18px 0 10px; font-family: var(--display); font-weight: 600; font-size: 20px; }
+.script-work {
+  margin: 18px 0 10px; font-family: var(--display); font-weight: 600; font-size: 20px;
+  letter-spacing: 0; text-transform: none; color: var(--ink);
+}
 .scene-block { position: relative; margin-bottom: 14px; padding-left: 22px; }
 .scene-block .scene-text { margin: 0; }
 .scene-block.is-focus > .scene-text { border-color: var(--nonphoto); outline: 1px solid var(--nonphoto); }
