@@ -30,3 +30,6 @@ out/
 *.fadein
 *.fountain
 !fixtures/**/*.fountain
+
+# Claude Code agent worktrees — never commit
+.claude/worktrees/

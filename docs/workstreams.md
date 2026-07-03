@@ -106,11 +106,18 @@ shared migrations) and can land in any order.
 | P3-RULES | Rule builder v1 | structured rules over the closed predicate vocabulary → SQL checks; UI in the surface | P3-ENGINE (toggles first), P3-SURFACE; migration lane |
 | P3-TRUST | Trust mechanics | export-everything, delete-everything, ToS/no-training warranty on the pricing page | P3-IDENTITY; ToS is a human/legal track that runs parallel from wave 1 |
 
+### Wave 5 — schema sync & integration (after Wave 4, before the launch gate)
+
+| ID | Workstream | Scope | Notes |
+|---|---|---|---|
+| P3-SCHEMA-SYNC | Schema mirror sync + deferred DDL | (1) Land the DDL queued in MIGRATIONS-NEEDED.md (e.g. `assertions.confirmed_by/confirmed_at`) as one migration and switch the confirm queue's attribution from usage_events audit rows to the real columns. (2) Regenerate `db/schema.sql` (the plain-Postgres mirror) so it matches the full supabase/migrations/ chain — it has drifted since the identity migration. (3) Verify the whole chain applies clean on a fresh `supabase start`. | Takes the migration lane — nothing else with DDL in flight |
+| P3-WIRING | Deferred cross-boundary wiring | The one-liners each wave deferred at its boundary: `ops.metering.meter` on the extract/llm.py call site; `ops.middleware.rate_limited` on surface + ask routes; HTTP routes for share links (canon/export/share.py → ui/). | Small; can ride with P3-SCHEMA-SYNC or land beside it |
+
 ### Build-phase merge order, flattened
 
 ```
 Phase 0 exit ─► P1-REPORT ─► P3-ENGINE ─┐
-               P3-FDX ──────────────────┼─► P3-IDENTITY ─► { P3-SURFACE · P3-ARTIFACTS · P3-CONFIRM · P3-OPS } ─► { P3-BILLING · P3-RULES · P3-TRUST } ─► launch
+               P3-FDX ──────────────────┼─► P3-IDENTITY ─► { P3-SURFACE · P3-ARTIFACTS · P3-CONFIRM · P3-OPS } ─► { P3-BILLING · P3-RULES · P3-TRUST } ─► { P3-SCHEMA-SYNC · P3-WIRING } ─► launch gate
                P3-CONTENT ──────────────┘
 ```
 
