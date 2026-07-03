@@ -15,6 +15,7 @@ from pathlib import Path
 from . import ask as ask_mod
 from . import check as check_mod
 from . import extract as extract_mod
+from .export import cli as export_cli
 from . import holes as holes_mod
 from . import ingest as ingest_mod
 from . import report as report_mod
@@ -695,6 +696,8 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--coverage-out", default=None,
                      help="write coverage_notes eval JSON here")
     rep.set_defaults(func=cmd_report)
+
+    export_cli.register(sub)  # `canon export bible|report` (canon/export/cli.py)
     return p
 
 
