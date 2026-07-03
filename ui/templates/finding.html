@@ -6,7 +6,7 @@
 <div class="page-head">
   <div class="crumb"><a href="/findings{{ m.wq() }}">Findings</a> /</div>
   <h1>{{ m.severity_badge(f.severity) }} {{ f.check_name }}
-    {% if f.sealed %}<span class="badge status-sealed">sealed</span>{% endif %}
+    {% if f.sealed %}<span class="badge status-sealed" title="Stet — let it stand. Writer marked intentional.">stet</span>{% endif %}
   </h1>
 </div>
 
@@ -43,26 +43,26 @@
   <aside class="col-side">
     {# The one write op: seal / unseal. DB-native — writes the seals table. #}
     <section class="panel seal-box {{ 'sealed' if f.sealed }}">
-      <h2>Seal status</h2>
+      <h2>Stet</h2>
       {% if f.sealed %}
-        <p class="seal-state on">✓ Sealed — suppressed from the report and re-checks.</p>
+        <p class="seal-state on">✓ STET — let it stand. Suppressed from the report and re-checks.</p>
         {% if f.seal and f.seal.reason %}
         <p class="seal-reason"><span class="lbl">reason</span> {{ f.seal.reason }}</p>
         {% else %}<p class="seal-reason muted">No reason recorded.</p>{% endif %}
         <form method="post" action="/findings/{{ f.id }}/unseal{{ m.wq() }}">
-          <button type="submit" class="btn-unseal">Unseal</button>
+          <button type="submit" class="btn-unseal" title="lift the stet — this finding goes live again">Lift STET</button>
         </form>
       {% elif f.sealable %}
-        <p class="seal-state">Live. If a writer marked this intentional, seal it to
+        <p class="seal-state">Live. If a writer marked this intentional, stet it to
           suppress it on the next <code>canon check</code>.</p>
         <form method="post" action="/findings/{{ f.id }}/seal{{ m.wq() }}">
           <label class="seal-label">reason (optional)
             <textarea name="reason" rows="3" placeholder="e.g. flashback — intentional; cleared by showrunner"></textarea>
           </label>
-          <button type="submit" class="btn-seal">Seal this finding</button>
+          <button type="submit" class="btn-seal" title="Stet — let it stand. Writer marked intentional.">STET — let it stand</button>
         </form>
       {% else %}
-        <p class="muted">This finding has no anchor assertion, so it can't be sealed.</p>
+        <p class="muted">This finding has no anchor assertion, so it can't be stetted.</p>
       {% endif %}
     </section>
 

@@ -7,8 +7,8 @@
 {% set sealed = findings | selectattr('sealed') | list %}
 
 <div class="page-head">
-  <h1>Findings <span class="count">{{ live|length }} live</span>{% if sealed %} <span class="count muted">{{ sealed|length }} sealed</span>{% endif %}</h1>
-  <p class="sub">Continuity violations from <code>db/checks.sql</code>. Each cites its scene; seal one a writer marked intentional.</p>
+  <h1>Findings <span class="count">{{ live|length }} live</span>{% if sealed %} <span class="count muted">{{ sealed|length }} stet</span>{% endif %}</h1>
+  <p class="sub">Continuity violations from <code>db/checks.sql</code>. Each cites its scene; stet one a writer marked intentional.</p>
 </div>
 
 {% macro finding_row(f) %}
@@ -19,7 +19,7 @@
   <td class="cite-cell">
     {% if f.scene_id %}{{ m.cite(f.scene_id, f.scene_slug, f.story_position, f.episode_title) }}{% else %}<span class="muted">—</span>{% endif %}
   </td>
-  <td>{% if f.sealed %}<span class="badge status-sealed">sealed</span>{% endif %}</td>
+  <td>{% if f.sealed %}<span class="badge status-sealed" title="Stet — let it stand. Writer marked intentional.">stet</span>{% endif %}</td>
 </tr>
 {% endmacro %}
 
@@ -37,12 +37,12 @@
 {% endfor %}
 
 {% if not live %}
-<section class="panel"><p class="muted">No live findings. {% if sealed %}All {{ sealed|length }} are sealed.{% else %}Clean — or run <code>canon check --world {{ world.name }}</code>.{% endif %}</p></section>
+<section class="panel"><p class="muted">No live findings. {% if sealed %}All {{ sealed|length }} carry a stet.{% else %}Clean — or run <code>canon check --world {{ world.name }}</code>.{% endif %}</p></section>
 {% endif %}
 
 {% if sealed %}
 <section class="panel sealed-panel" id="sealed">
-  <h2>Sealed <span class="count">{{ sealed|length }}</span> <span class="sub-inline">— writer marked intentional, suppressed on re-check</span></h2>
+  <h2>Stet <span class="count">{{ sealed|length }}</span> <span class="sub-inline">— let it stand; writer marked intentional, suppressed on re-check</span></h2>
   <table class="grid findings">
     <thead><tr><th>severity</th><th>check</th><th>explanation</th><th>citation</th><th></th></tr></thead>
     <tbody>{% for f in sealed %}{{ finding_row(f) }}{% endfor %}</tbody>

@@ -39,7 +39,7 @@
     <div class="note-actions">
       <form method="post" action="/worlds/{{ world.id }}/notes/{{ n.id }}/seal" class="act seal-form">
         <button type="submit" class="btn-note btn-note-seal" {% if not can_edit %}disabled
-          title="requires the editor role"{% else %}title="intentional — permanent, never re-raised (s)"{% endif %}>Seal</button>
+          title="requires the editor role"{% else %}title="Stet — let it stand. Writer marked intentional; permanent, never re-raised (s)"{% endif %}>STET</button>
       </form>
       <form method="post" action="/worlds/{{ world.id }}/notes/{{ n.id }}/dismiss" class="act dismiss-form">
         <button type="submit" class="btn-note btn-note-dismiss" {% if not can_edit %}disabled

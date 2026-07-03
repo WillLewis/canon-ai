@@ -2,7 +2,6 @@
 {% import "_macros.html" as m with context %}
 {% import "_surface.html" as sf with context %}
 {% block title %}Reader's Report · {{ world.name }}{% endblock %}
-{% block bodyclass %}surface{% endblock %}
 {% block foottag %}Reader's Report — findings and questions with receipts; the writer is the only generator.{% endblock %}
 {% block content %}
 
@@ -14,7 +13,7 @@
     {% if draft_count %}<a class="verify-pill" href="/worlds/{{ world.id }}/confirm"
       title="uncertain extracted facts awaiting your ruling">Verify your canon ({{ draft_count }})</a>{% endif %}
     {% endif %}</p>
-  {% if not share_mode %}<p class="kbd-hint muted small">keyboard: <kbd>j</kbd>/<kbd>k</kbd> next/prev note · <kbd>enter</kbd> expand · <kbd>s</kbd> seal · <kbd>d</kbd> dismiss</p>{% endif %}
+  {% if not share_mode %}<p class="kbd-hint muted small">keyboard: <kbd>j</kbd>/<kbd>k</kbd> next/prev note · <kbd>enter</kbd> expand · <kbd>s</kbd> stet · <kbd>d</kbd> dismiss</p>{% endif %}
 </div>
 
 <div class="cols">

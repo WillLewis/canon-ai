@@ -37,14 +37,14 @@
 </section>
 
 <section class="panel" id="diff-sealed">
-  <h2>Sealed <span class="count">{{ diff.sealed|length }}</span>
-    <span class="sub-inline">— ruled intentional; never re-raised</span></h2>
+  <h2>Stet <span class="count">{{ diff.sealed|length }}</span>
+    <span class="sub-inline">— let it stand; ruled intentional, never re-raised</span></h2>
   {% for n in diff.sealed %}
   <div class="diff-note">
     <span class="badge fam-{{ n.family }}">{{ n.family }}</span>
     <span class="note-line">{{ n.summary }}</span>
   </div>
-  {% else %}<p class="muted">No sealed notes.</p>{% endfor %}
+  {% else %}<p class="muted">No stet notes.</p>{% endfor %}
 </section>
 
 {% if diff.dismissed %}
