@@ -55,6 +55,29 @@ Grading harness for Phase 0. Extraction recall is scored against the expected-as
 - T2: Edda's E101/sc2 line `Your uncle keeps two sets of numbers. The real one's not in that office.` is `believes`, not `knows` — extracting it as a world-fact will cascade into spurious flags.
 - Tobias appearing in E101 scenes before his death is obviously fine; intervals must be position-correct.
 
+## Coverage notes
+
+Reader's Report coverage scoring uses this table in addition to planted continuity errors.
+Coverage notes are grounded-subjective: candidates must come from the graph, the LLM may
+decline or phrase them, and the validator must drop notes with bad citations.
+
+### Planted coverage items
+
+| # | Family | Where | Line | Must mention |
+|---|---|---|---|---|
+| C1 | F1 open_question | E101/sc4 | `Mara finds her brother's skiff, the DANNY-LEE, tied off and empty.` | Danny Voss |
+| C2 | F2 idle_setup | E101/sc4 | `I'll find you, Danny. Whatever it takes.` | find Danny |
+| C3 | F3 dormant_knowledge | E102/sc1 | `It's still under the chapel floor stone where your uncle hid it.` | Cole, ledger location |
+| C4 | F4 unmotivated_turn | E102/sc4 | `Mara behind the wheel of Tobias's pickup, driving hard along the cliff road, ledger on the passenger seat.` | Mara, drive |
+
+### Coverage decoys
+
+| # | Family | Where | Line | Must mention |
+|---|---|---|---|---|
+| D1 | F2 idle_setup | E103/sc4 | `Mara drops the pry bar and grabs him.` | find Danny |
+| D2 | F3 dormant_knowledge | E102/sc2 | `Mara pries up the loose floor stone.` | Mara, ledger location |
+| D3 | F4 unmotivated_turn | E102/sc2 | `Mara pries up the loose floor stone.` | Cole, ledger location |
+
 ## Season 1 extension note
 
 `eval/expected_greyharbor_s1.json` is the held-out season key for E101-E108. It keeps original assertions A1-A15 and planted findings P1-P4. The two-episode notes N1/N2 are resolved in the season extension because Danny appears alive in E103; the season key replaces them with new note targets N3/N4. E103-E108 contain no inline planted/trap/note markers.
