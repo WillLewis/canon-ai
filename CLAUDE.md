@@ -40,6 +40,12 @@ Corollary: every flag, answer, or finding **must cite its source** (episode/scen
 - Migrations via supabase CLI; never edit schema in the dashboard.
 - Small commits, plain-English messages; note which PLAN.md item each serves.
 
+## Design System
+Always read DESIGN.md before making any visual or UI decisions.
+All font choices, colors, spacing, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match DESIGN.md.
+
 ## Owner context
 
 Solo founder, nights/weekends (~10–15 hrs/wk), building with Claude Code + Codex. Optimize for: fewest moving parts, fastest path to the Phase 0 demo, and code a single person can hold in their head.
