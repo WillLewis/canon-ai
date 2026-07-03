@@ -18,12 +18,12 @@ import os
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import db
+from . import auth, db
 from .format import gloss_range, highlight, object_side, quote_present, SEVERITY_RANK
 
 _HERE = Path(__file__).resolve().parent
@@ -239,19 +239,21 @@ async def _form(request: Request) -> dict:
 
 
 @app.post("/findings/{finding_id}/seal")
-async def seal(request: Request, finding_id: int, world: str | None = None):
+async def seal(request: Request, finding_id: int, world: str | None = None,
+               user: auth.User = Depends(auth.require_role("editor"))):
     worlds = db.list_worlds()
     active = _pick_world(world, worlds)
     if not active:
         return _no_world(request, worlds)
     form = await _form(request)
-    db.seal_finding(active["id"], finding_id, form.get("reason", ""))
+    db.seal_finding(active["id"], finding_id, form.get("reason", ""), ruled_by=user.id)
     return RedirectResponse(
         url=f"/findings/{finding_id}?world={active['name']}", status_code=303)
 
 
 @app.post("/findings/{finding_id}/unseal")
-async def unseal(request: Request, finding_id: int, world: str | None = None):
+async def unseal(request: Request, finding_id: int, world: str | None = None,
+                 user: auth.User = Depends(auth.require_role("editor"))):
     worlds = db.list_worlds()
     active = _pick_world(world, worlds)
     if not active:

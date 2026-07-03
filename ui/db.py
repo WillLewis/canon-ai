@@ -96,6 +96,21 @@ def get_world(name: str) -> dict | None:
         return _one(conn, "select id, name from worlds where name = %(n)s", {"n": name})
 
 
+def member_role(world_id: int, user_id: str) -> str | None:
+    """The user's role on a world: worlds.owner_id counts as 'owner', otherwise
+    the world_members row (mirrors the canon_world_role() SQL helper the RLS
+    policies use, so the app and the database agree on who may do what)."""
+    with db_conn() as conn:
+        row = _one(conn, """
+            select coalesce(
+              (select 'owner' from worlds w
+                 where w.id = %(w)s and w.owner_id = %(u)s::uuid),
+              (select m.role from world_members m
+                 where m.world_id = %(w)s and m.user_id = %(u)s::uuid)) as role
+        """, {"w": world_id, "u": user_id})
+    return row["role"] if row else None
+
+
 def world_summary(world_id: int) -> dict:
     """Dashboard counts: entities by kind, assertions by status, findings by severity."""
     with db_conn() as conn:
@@ -398,13 +413,17 @@ def get_finding(world_id: int, finding_id: int) -> dict | None:
     return f
 
 
-def seal_finding(world_id: int, finding_id: int, reason: str) -> bool:
+def seal_finding(world_id: int, finding_id: int, reason: str,
+                 ruled_by: str | None = None) -> bool:
     """Insert a seal for the finding and mirror it onto findings.sealed.
 
     Writes the `seals` table on the exact key the checker reads
     (canon/check.py: (check_name, assertion_a, coalesce(assertion_b, 0))). The
     matching `findings.sealed` update means the UI reflects the seal without
     re-running `canon check`; a real re-check would compute the same flag.
+
+    ruled_by (an auth.users uuid) records who made the ruling; ruled_at is
+    stamped in SQL. Both columns arrive with the identity_and_access migration.
     """
     with db_conn() as conn:
         cur = conn.cursor()
@@ -423,9 +442,10 @@ def seal_finding(world_id: int, finding_id: int, reason: str) -> bool:
               and assertion_a = %(a)s and coalesce_b = coalesce(%(b)s, 0)
         """, key)
         cur.execute("""
-            insert into seals (world_id, check_name, assertion_a, assertion_b, reason)
-            values (%(w)s, %(c)s, %(a)s, %(b)s, %(reason)s)
-        """, key | {"reason": (reason or "").strip() or None})
+            insert into seals (world_id, check_name, assertion_a, assertion_b,
+                               reason, ruled_by, ruled_at)
+            values (%(w)s, %(c)s, %(a)s, %(b)s, %(reason)s, %(ruled_by)s::uuid, now())
+        """, key | {"reason": (reason or "").strip() or None, "ruled_by": ruled_by})
         cur.execute(f"""
             update findings set sealed = true
             where world_id = %(w)s and check_name = %(c)s and assertion_a = %(a)s
