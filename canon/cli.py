@@ -20,6 +20,7 @@ from . import holes as holes_mod
 from . import ingest as ingest_mod
 from . import report as report_mod
 from . import resolve as resolve_mod
+from . import rules as rules_mod
 from . import store as store_mod
 
 
@@ -698,6 +699,7 @@ def build_parser() -> argparse.ArgumentParser:
     rep.set_defaults(func=cmd_report)
 
     export_cli.register(sub)  # `canon export bible|report` (canon/export/cli.py)
+    rules_mod.register_cli(sub)  # `canon rules list|run` (canon/rules.py)
     return p
 
 
