@@ -33,3 +33,5 @@ out/
 
 # Claude Code agent worktrees — never commit
 .claude/worktrees/
+.gstack/
+.claude/launch.json
