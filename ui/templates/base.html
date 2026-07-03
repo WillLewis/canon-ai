@@ -13,6 +13,7 @@
   <nav class="mainnav">
     <a href="/worlds/{{ world.id }}/report" class="{{ 'on' if nav=='report' }}">Report</a>
     <a href="/worlds/{{ world.id }}/script" class="{{ 'on' if nav=='script' }}">Script</a>
+    <a href="/worlds/{{ world.id }}/rules" class="{{ 'on' if nav=='rules' }}">Rules</a>
     <a href="/?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='overview' }}">Overview</a>
     <a href="/entities?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='entities' }}">Entities</a>
     <a href="/assertions?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='assertions' }}">Assertions</a>
@@ -28,6 +29,7 @@
     </select>
   </form>
   {% endif %}
+  <nav class="mainnav plan"><a href="/billing" class="{{ 'on' if nav=='billing' }}">Plan</a></nav>
 </header>
 
 <main class="content">
@@ -36,7 +38,7 @@
 
 <footer class="foot">
   <span>{% block foottag %}Read-only inspector — a microscope for the engine.{% endblock %}</span>
-  <span class="rule">Canon never writes story · every claim cites its source.</span>
+  <span class="rule">Canon never writes story · every claim cites its source. · <a href="/legal/terms">Terms &amp; trust</a></span>
 </footer>
 {% block scripts %}{% endblock %}
 </body>

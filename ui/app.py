@@ -34,6 +34,16 @@ app = FastAPI(title="Canon AI — Triage Workbench")
 app.mount("/static", StaticFiles(directory=str(_HERE / "static")), name="static")
 templates = Jinja2Templates(directory=str(_HERE / "templates"))
 
+# Wave 4 routers (billing, rule builder, trust) — self-contained modules wired
+# here so parallel workstreams never had to edit this file (docs/workstreams.md).
+from billing.routes import router as _billing_router  # noqa: E402
+from . import rules_ui as _rules_ui  # noqa: E402
+from . import trust_ui as _trust_ui  # noqa: E402
+
+app.include_router(_billing_router)
+app.include_router(_rules_ui.router)
+app.include_router(_trust_ui.router)
+
 # Expose the pure display helpers to every template.
 templates.env.globals["gloss_range"] = gloss_range
 templates.env.globals["object_side"] = object_side

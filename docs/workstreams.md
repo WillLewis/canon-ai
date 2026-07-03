@@ -111,7 +111,7 @@ shared migrations) and can land in any order.
 | ID | Workstream | Scope | Notes |
 |---|---|---|---|
 | P3-SCHEMA-SYNC | Schema mirror sync + deferred DDL | (1) Land the DDL queued in MIGRATIONS-NEEDED.md (e.g. `assertions.confirmed_by/confirmed_at`) as one migration and switch the confirm queue's attribution from usage_events audit rows to the real columns. (2) Regenerate `db/schema.sql` (the plain-Postgres mirror) so it matches the full supabase/migrations/ chain — it has drifted since the identity migration. (3) Verify the whole chain applies clean on a fresh `supabase start`. | Takes the migration lane — nothing else with DDL in flight |
-| P3-WIRING | Deferred cross-boundary wiring | The one-liners each wave deferred at its boundary: `ops.metering.meter` on the extract/llm.py call site; `ops.middleware.rate_limited` on surface + ask routes; HTTP routes for share links (canon/export/share.py → ui/). | Small; can ride with P3-SCHEMA-SYNC or land beside it |
+| P3-WIRING | Deferred cross-boundary wiring | The one-liners each wave deferred at its boundary: `ops.metering.meter` on the extract/llm.py call site; `ops.middleware.rate_limited` on surface + ask routes, with `billing.store.make_tier_resolver` as its tier hook; `billing.gating.plan_gate` on the paid features (bible export, retcon ripple, rule-authoring writes); HTTP routes for share links (canon/export/share.py → ui/); report findings loaded through `canon.rules.compose_findings` so writer rules + exceptions apply. | Small; can ride with P3-SCHEMA-SYNC or land beside it |
 
 ### Build-phase merge order, flattened
 
