@@ -365,10 +365,11 @@ def rule_assertion(world_id: int, assertion_id: int, status: str,
     The WHERE guards status='draft', so rulings are idempotent and can never
     flip a settled row (canon, rejected, retconned). Confirming also sets
     confirmed_by_human, matching canon.store.status_for's confirmed -> canon
-    promotion. Attribution: the assertions table has no confirmed_by column yet
-    (MIGRATIONS-NEEDED.md — set confirmed_by/confirmed_at here once the columns
-    land), so each applied ruling writes a usage_events audit row instead
-    (kind per ASSERTION_RULINGS, zero tokens, user + world attributed).
+    promotion. Attribution lands on the row itself: confirmed_by/confirmed_at
+    (20260703100000_queued_ddl_and_attribution.sql) record who ruled and when,
+    for confirm and reject alike. Each applied ruling still writes a
+    usage_events audit row (kind per ASSERTION_RULINGS, zero tokens, user +
+    world attributed) — those rows double as launch analytics.
     """
     if status not in ASSERTION_RULINGS:
         raise ValueError(
@@ -378,10 +379,12 @@ def rule_assertion(world_id: int, assertion_id: int, status: str,
         cur.execute("""
             update assertions
                set status = %(s)s,
-                   confirmed_by_human = confirmed_by_human or %(confirm)s
+                   confirmed_by_human = confirmed_by_human or %(confirm)s,
+                   confirmed_by = %(by)s::uuid,
+                   confirmed_at = now()
              where id = %(id)s and world_id = %(w)s and status = 'draft'
              returning id
-        """, {"s": status, "confirm": status == "canon",
+        """, {"s": status, "confirm": status == "canon", "by": ruled_by,
               "id": assertion_id, "w": world_id})
         changed = cur.fetchone() is not None
         if changed:

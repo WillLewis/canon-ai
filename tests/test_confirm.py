@@ -279,6 +279,10 @@ def test_confirm_transition_sql_guards_draft_and_writes_audit_row():
     assert "returning id" in upd_sql
     assert upd_params["s"] == "canon" and upd_params["confirm"] is True
     assert upd_params["id"] == 11 and upd_params["w"] == 1
+    # Ruling attribution on the row itself (20260703100000 migration): who + when.
+    assert "confirmed_by = %(by)s::uuid" in upd_sql
+    assert "confirmed_at = now()" in upd_sql
+    assert upd_params["by"] == EDITOR
     # The audit row: usage_events, kind clean (no ':unpriced'), zero tokens.
     ins_sql, ins_params = cur.executed[1]
     assert ins_sql.lower().startswith("insert into usage_events")
@@ -294,6 +298,7 @@ def test_reject_transition_writes_reject_ruling_audit_row():
         assert db.rule_assertion(1, 12, "rejected", ruled_by=EDITOR) is True
     upd_sql, upd_params = cur.executed[0]
     assert upd_params["s"] == "rejected" and upd_params["confirm"] is False
+    assert upd_params["by"] == EDITOR                    # rejects are attributed too
     assert cur.executed[1][1][2] == "reject_ruling"
 
 
