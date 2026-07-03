@@ -7,6 +7,9 @@ dependencies = ["psycopg[binary]>=3.1"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+# Stripe SDK is optional (guarded import in billing/stripe_client.py, same
+# pattern as weasyprint in canon/export); the test suite passes without it.
+billing = ["stripe>=9"]
 
 [project.scripts]
 canon = "canon.cli:main"
