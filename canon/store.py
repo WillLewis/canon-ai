@@ -17,7 +17,8 @@ Key transforms done here (not in earlier stages):
     check also needs the scene's setting LOCATION present, so we resolve each
     scene's slug to a location entity and add it.
   - character_locations: mirror located_at(character -> location) assertions into
-    the typed table whose exclusion constraint enforces one-place-per-interval.
+    the typed table whose exclusion constraint rejects one-place-per-interval
+    violations at write time.
 
 status (v0 gate): confidence >= conf_canon (default 0.85) -> 'canon', else
 'draft', so the check layer has a populated canon graph. extraction.md's stricter
@@ -176,9 +177,8 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
     # subject moving to a new place CLOSES their previous open interval at the
     # new position ([1,) + move at 2 -> [1,2) + [2,)). Without this, successive
     # locations overlap and the exclusion constraint rejects ordinary movement.
-    # A same-position pair (two places at once) is left open deliberately: the
-    # character_locations sync is skipped for it and the presence_conflict scan
-    # reports it as a finding instead of aborting the load.
+    # A same-position pair (two places at once) is left open deliberately so the
+    # character_locations exclusion constraint rejects character-location writes.
     open_located: dict = {}  # subject_db_id -> (assertion_db_id, lower_bound, location_db_id)
     last_loc_start: dict = {}  # (subject_db_id, location_db_id) -> most recent anchored lower
     seen_events: set = set()   # (subject_db_id, predicate) — dedup redundant dies/destroyed
@@ -218,7 +218,6 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
         confidence = max(0.0, min(1.0, float(a.get("confidence") or 0.0)))
         status = status_for(a.get("confidence"), a.get("confirmed_by_human", False), conf_canon)
 
-        sync_ok = True
         if predicate == "located_at":
             # Backdated continuation: a located_at with an OPEN lower bound but a CONCRETE
             # upper bound is a *duration* claim ("at L until P") — usually a restatement of
@@ -261,9 +260,10 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
                         (prev_lower, lower, prev_aid),
                     )
                 else:
-                    # same position (or both backdated): genuine conflict — leave the
-                    # scan check to flag it; don't fight the exclusion constraint
-                    sync_ok = False
+                    # Same position (or both backdated): genuine conflict. Do
+                    # not close the previous interval; inserting the mirror row
+                    # below will overlap and trip the exclusion constraint.
+                    pass
 
         cur.execute(
             "INSERT INTO assertions "
@@ -278,13 +278,7 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
         if predicate in EVENT_PREDICATES:
             seen_events.add((subj[0], predicate))
 
-        if predicate == "located_at" and upper is None and sync_ok:
-            # backdated rows (lower None) are tracked too, so (,) gets closed by
-            # the next move; conflicting (sync_ok=False) rows are not tracked —
-            # the previously synced interval must stay the one the next move closes
-            open_located[subj[0]] = (aid, lower, obj_id)
-
-        if (predicate == "located_at" and sync_ok and subj[1] == "character"
+        if (predicate == "located_at" and subj[1] == "character"
                 and obj is not None and obj[1] == "location"):
             cur.execute(
                 "INSERT INTO character_locations "
@@ -293,6 +287,12 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
                 (aid, subj[0], obj_id, lower, upper),
             )
             n_char_loc += 1
+
+        if predicate == "located_at" and upper is None:
+            # Backdated rows (lower None) are tracked too, so (,) gets closed by
+            # the next move. This happens after the character_locations mirror
+            # insert so failed conflicts do not advance local movement state.
+            open_located[subj[0]] = (aid, lower, obj_id)
 
     conn.commit()
     return {
