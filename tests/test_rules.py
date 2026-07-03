@@ -436,12 +436,16 @@ def bearer(sub):
 
 
 @contextlib.contextmanager
-def wired(rule_rows=None, auth_disabled=True):
+def wired(rule_rows=None, auth_disabled=True, tier="paid"):
     """TestClient over the router with every data function it touches faked.
-    Yields (client, calls) recording store writes."""
+    Yields (client, calls) recording store writes. Rule authoring is a paid
+    feature (P3-WIRING plan gate), so the fixture forces the paid tier by
+    default; pass tier='free' to exercise the 402 path, or tier=None to leave
+    tier resolution to rules_ui.rule_tier_resolver."""
     rule_rows = [dict(RULE_ROW), dict(DISABLED_ROW)] if rule_rows is None else rule_rows
     calls = {"create": [], "toggle": [], "delete": []}
-    saved_env = {k: os.environ.get(k) for k in ("SUPABASE_JWT_SECRET", "AUTH_DISABLED")}
+    saved_env = {k: os.environ.get(k) for k in
+                 ("SUPABASE_JWT_SECRET", "AUTH_DISABLED", "CANON_FORCE_TIER")}
     db_names = ("list_worlds", "member_role", "entity_names", "list_entities")
     ui_names = ("store_list", "store_create", "store_set_enabled", "store_delete",
                 "world_traits", "world_positions")
@@ -453,6 +457,10 @@ def wired(rule_rows=None, auth_disabled=True):
             os.environ["AUTH_DISABLED"] = "1"
         else:
             os.environ.pop("AUTH_DISABLED", None)
+        if tier is None:
+            os.environ.pop("CANON_FORCE_TIER", None)
+        else:
+            os.environ["CANON_FORCE_TIER"] = tier
 
         db.list_worlds = lambda: [dict(WORLD)]
         db.member_role = lambda world_id, user_id: (
@@ -620,6 +628,59 @@ def test_toggle_and_delete_gate_on_editor_and_record():
         r = client.post(f"/worlds/1/rules/{rid}/delete", headers=bearer(EDITOR))
         assert r.status_code == 303
         assert calls["delete"] == [{"world_id": 1, "rule_id": rid}]
+
+
+# --- plan gate (P3-WIRING): rule authoring is a paid feature ----------------------
+
+def test_rule_writes_402_for_free_tier_with_upgrade_path():
+    rid = RULE_ROW["id"]
+    with wired(tier="free") as (client, calls):          # dev owner, free plan
+        r = client.post("/worlds/1/rules", data=CANNOT_FORM)
+        assert r.status_code == 402
+        detail = r.json()["detail"]
+        assert detail["error"] == "payment_required"
+        assert detail["feature"] == "rule_authoring"
+        assert detail["upgrade_url"] == "/billing"       # the upgrade path ships in the body
+        assert client.post(f"/worlds/1/rules/{rid}/toggle",
+                           data={"enabled": "0"}).status_code == 402
+        assert client.post(f"/worlds/1/rules/{rid}/delete").status_code == 402
+        assert calls == {"create": [], "toggle": [], "delete": []}   # nothing written
+
+
+def test_rule_writes_pass_for_paid_tier():
+    with wired(tier="paid") as (client, calls):
+        assert client.post("/worlds/1/rules", data=CANNOT_FORM).status_code == 303
+    assert len(calls["create"]) == 1
+
+
+def test_rule_reads_stay_open_to_free_members():
+    with wired(tier="free") as (client, _):
+        r = client.get("/worlds/1/rules")
+    assert r.status_code == 200
+    assert "Marcus cannot possesses Lighthouse Key" in r.text
+
+
+def test_rule_gate_honors_a_fake_tier_resolver():
+    saved = rules_ui.rule_tier_resolver
+    try:
+        rules_ui.rule_tier_resolver = lambda user: "paid"
+        with wired(tier=None) as (client, calls):        # no env force: resolver decides
+            assert client.post("/worlds/1/rules", data=CANNOT_FORM).status_code == 303
+        rules_ui.rule_tier_resolver = lambda user: "free"
+        with wired(tier=None) as (client, calls):
+            assert client.post("/worlds/1/rules", data=CANNOT_FORM).status_code == 402
+            assert calls["create"] == []
+    finally:
+        rules_ui.rule_tier_resolver = saved
+
+
+def test_rule_gate_auth_still_wins_over_payment():
+    # 401/403 (who are you / not your world) take precedence over 402 (pay up).
+    with wired(auth_disabled=False, tier="free") as (client, calls):
+        assert client.post("/worlds/1/rules", data=CANNOT_FORM).status_code == 401
+        assert client.post("/worlds/1/rules", data=CANNOT_FORM,
+                           headers=bearer(VIEWER)).status_code == 403
+        assert calls["create"] == []
 
 
 # --- CLI registration ------------------------------------------------------------
