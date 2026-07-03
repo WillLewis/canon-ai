@@ -358,3 +358,21 @@ details.note.kbd-focus { outline: 2px solid #b08d2f; outline-offset: 1px; }
   font-size: 12px; border-top: 1px solid var(--line); display: flex; gap: 16px; flex-wrap: wrap;
 }
 .foot .rule { color: #98a2b3; }
+
+/* ---- confirm queue (P3-CONFIRM) ---- */
+.verify-pill {
+  display: inline-block; margin-left: 10px; font-size: 12px; font-weight: 600;
+  border: 1px solid #b08d2f; color: #8f7126; background: #fdf8ec;
+  padding: 2px 12px; border-radius: 999px;
+}
+.verify-pill:hover { background: #b08d2f; color: #fff; text-decoration: none; }
+.draft-card { position: relative; }
+.draft-card.kbd-focus { outline: 2px solid #b08d2f; outline-offset: 1px; }
+.draft-card.is-pending { opacity: .5; }
+.draft-fact { font-weight: 550; font-size: 15px; }
+.btn-confirm { border-color: #bfe3cd; color: #1d7a47; }
+.btn-confirm:hover:not(:disabled) { background: #e7f7ee; border-color: #1d7a47; color: #1d7a47; }
+.btn-reject { border-color: #f6c9d8; color: #9c2b54; }
+.btn-reject:hover:not(:disabled) { background: #fff0f4; border-color: #9c2b54; color: #9c2b54; }
+.ruled-line { margin: 9px 0 0; font-size: 13px; color: #6b3fb0; }
+#queue-empty h2 { font-family: Georgia, "Times New Roman", serif; font-size: 18px; }

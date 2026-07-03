@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{# Confirm queue (P3-CONFIRM). Each card is one 'draft' assertion — an extracted
+   fact below the confidence gate — shown beside its verbatim supporting quote
+   and citation. The writer rules; Canon records. Nothing here is generated. #}
+{% block title %}Verify your canon · {{ world.name }}{% endblock %}
+{% block bodyclass %}surface{% endblock %}
+{% block foottag %}Confirm queue — extraction proposes, the writer rules.{% endblock %}
+{% block content %}
+
+<div class="page-head report-head" id="confirm-head">
+  <h1>Verify your canon <span class="sub-inline">— <span id="queue-n">{{ drafts|length }}</span> uncertain fact<span id="queue-plural">{{ 's' if drafts|length != 1 }}</span></span></h1>
+  <p class="sub">Extraction could not clear the confidence bar on these. Each ruling is
+    permanent: Confirm promotes the fact to canon; Reject removes it from every check.</p>
+  <p class="kbd-hint muted small" id="confirm-kbd-hint" {% if not drafts %}hidden{% endif %}>keyboard: <kbd>j</kbd>/<kbd>k</kbd> next/prev · <kbd>c</kbd> confirm · <kbd>r</kbd> reject · <kbd>u</kbd> undo last (5s)</p>
+</div>
+
+{% if drafts %}
+<section class="panel" id="confirm-queue">
+  {% for a in drafts %}
+  <div class="acard draft-card" id="draft-{{ a.id }}" data-assertion-id="{{ a.id }}">
+    <div class="acard-head">
+      <a class="aid" href="/assertions/{{ a.id }}?world={{ world.name|urlencode }}">#{{ a.id }}</a>
+      <span class="draft-fact">{{ plain_assertion(a) }}</span>
+    </div>
+    <div class="acard-meta">
+      <span class="chip" title="{{ a.valid_during }}">{{ gloss_range(a.valid_during) }}</span>
+      <span class="conf" title="extraction confidence">conf {{ '%.2f'|format(a.confidence) }}</span>
+      {% if a.is_flashback %}<span class="badge flashback">flashback</span>{% endif %}
+    </div>
+    {% if a.supporting_quote %}<blockquote class="quote">“{{ a.supporting_quote }}”</blockquote>
+    {% else %}<p class="cite-note"><span class="warn">no supporting quote stored</span> — judge from the scene.</p>{% endif %}
+    <div class="acard-cite">
+      <a class="cite" title="{{ a.scene_slug }}"
+         href="/worlds/{{ world.id }}/script?scene={{ a.scene_id }}&quote={{ (a.supporting_quote or '')|urlencode }}#scene-{{ a.scene_id }}">
+        <span class="cite-ep">{{ (a.episode_title.split('—')[0].strip() if a.episode_title and '—' in a.episode_title else (a.episode_title or 'scene')) }}</span>
+        <span class="cite-pos">pos {{ a.story_position }}</span>
+        <span class="cite-slug">{{ a.scene_slug or '(no slug)' }}</span>
+      </a>
+    </div>
+    <div class="note-actions">
+      <form method="post" action="/worlds/{{ world.id }}/assertions/{{ a.id }}/confirm" class="act confirm-form">
+        <button type="submit" class="btn-note btn-confirm" {% if not can_edit %}disabled
+          title="requires the editor role"{% else %}title="true — promote to canon (c)"{% endif %}>Confirm</button>
+      </form>
+      <form method="post" action="/worlds/{{ world.id }}/assertions/{{ a.id }}/reject" class="act reject-form">
+        <button type="submit" class="btn-note btn-reject" {% if not can_edit %}disabled
+          title="requires the editor role"{% else %}title="wrong — drop from checks (r)"{% endif %}>Reject</button>
+      </form>
+    </div>
+    <p class="ruled-line" hidden><span class="ruled-verb"></span> — <kbd>u</kbd> undoes for 5 seconds.</p>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="panel" id="queue-empty" {% if drafts %}hidden{% endif %}>
+  <h2>Nothing to verify — your canon is clean{% if verified_through is not none %} through scene {{ verified_through }}{% endif %}.</h2>
+  <p class="muted">Every extracted fact is settled: canon, or ruled out by you.</p>
+  <p><a class="btn-note" href="/worlds/{{ world.id }}/report">Re-run report</a></p>
+</section>
+
+{% endblock %}
+{% block scripts %}<script src="/static/confirm.js"></script>{% endblock %}

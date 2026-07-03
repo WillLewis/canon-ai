@@ -25,7 +25,8 @@ from fastapi.templating import Jinja2Templates
 
 from . import auth, db
 from . import notes as note_vm
-from .format import gloss_range, highlight, object_side, quote_present, SEVERITY_RANK
+from .format import (gloss_range, highlight, object_side, plain_assertion,
+                     quote_present, SEVERITY_RANK)
 
 _HERE = Path(__file__).resolve().parent
 
@@ -37,6 +38,7 @@ templates = Jinja2Templates(directory=str(_HERE / "templates"))
 templates.env.globals["gloss_range"] = gloss_range
 templates.env.globals["object_side"] = object_side
 templates.env.globals["quote_present"] = quote_present
+templates.env.globals["plain_assertion"] = plain_assertion
 templates.env.globals["SEVERITY_RANK"] = SEVERITY_RANK
 templates.env.filters["highlight"] = highlight
 templates.env.globals["FAMILY_LABELS"] = note_vm.FAMILY_LABELS
@@ -304,6 +306,12 @@ def _report_context(request: Request, world_id: int,
     grouped = note_vm.split_notes(notes)
     live, sealed_findings = _live_first(db.list_findings(world_id))
     role, can_edit = _surface_role(request, world_id)
+    summary = db.world_summary(world_id)
+    # The "Verify your canon (N)" pill count. world_summary already carries the
+    # by-status assertion counts, so the report render keeps its query budget
+    # (db.count_drafts is the same number for callers without a summary in hand).
+    draft_count = next((r["n"] for r in summary["assertions_by_status"]
+                        if r["status"] == "draft"), 0)
     return {
         "world": active, "worlds": worlds, "nav": "report",
         "grouped": grouped,
@@ -311,7 +319,8 @@ def _report_context(request: Request, world_id: int,
         "findings_more": max(0, len(live) - note_vm.FINDINGS_CAP),
         "findings_sealed_n": len(sealed_findings),
         "load_bearing": db.load_bearing(world_id, note_vm.LOAD_BEARING_CAP),
-        "summary": db.world_summary(world_id),
+        "summary": summary,
+        "draft_count": draft_count,
         "diff": note_vm.diff_summary(notes),
         "role": role, "can_edit": can_edit,
         "ask_q": ask_q, "ask_result": ask_result,
@@ -421,6 +430,54 @@ async def ask_pane(request: Request, world_id: int):
     if ctx is None:
         return _no_world(request, db.list_worlds())
     return templates.TemplateResponse(request, template, ctx)
+
+
+# ---------------------------------------------------------------------------
+# Confirm queue (P3-CONFIRM) — "verify your canon". Extraction loads sub-gate
+# assertions as status 'draft' (canon/store.py); this surface lists them and
+# records the writer's ruling: Confirm -> canon, Reject -> rejected. Both are
+# guarded WHERE status='draft' in ui/db.py, so a ruling never flips a settled
+# row. Read view stays open (viewers see the queue, buttons disabled); the two
+# writes gate on the editor role. Nothing is generated — every card shows an
+# extracted fact beside its verbatim supporting quote, and the writer judges.
+# ---------------------------------------------------------------------------
+
+@app.get("/worlds/{world_id}/confirm", response_class=HTMLResponse)
+def confirm_queue(request: Request, world_id: int):
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return _no_world(request, worlds)
+    drafts = db.list_draft_assertions(world_id)
+    role, can_edit = _surface_role(request, world_id)
+    return templates.TemplateResponse(request, "confirm.html", {
+        "world": active, "worlds": worlds, "nav": "confirm",
+        "drafts": drafts,
+        "verified_through": db.last_story_position(world_id),
+        "role": role, "can_edit": can_edit,
+    })
+
+
+async def _rule_assertion(request: Request, world_id: int, assertion_id: int,
+                          status: str, user: auth.User):
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return _no_world(request, worlds)
+    db.rule_assertion(world_id, assertion_id, status, ruled_by=user.id)
+    return RedirectResponse(url=f"/worlds/{world_id}/confirm", status_code=303)
+
+
+@app.post("/worlds/{world_id}/assertions/{assertion_id}/confirm")
+async def confirm_assertion(request: Request, world_id: int, assertion_id: int,
+                            user: auth.User = Depends(auth.require_role("editor"))):
+    """Writer ruled the extracted fact true: draft -> canon (idempotent)."""
+    return await _rule_assertion(request, world_id, assertion_id, "canon", user)
+
+
+@app.post("/worlds/{world_id}/assertions/{assertion_id}/reject")
+async def reject_assertion(request: Request, world_id: int, assertion_id: int,
+                           user: auth.User = Depends(auth.require_role("editor"))):
+    """Writer ruled the extraction wrong: draft -> rejected (idempotent)."""
+    return await _rule_assertion(request, world_id, assertion_id, "rejected", user)
 
 
 def main() -> None:
