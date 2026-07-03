@@ -9,7 +9,9 @@
 <div class="page-head report-head">
   <h1>Reader's Report <span class="sub-inline">— {{ world.name }}</span></h1>
   <p class="sub">Grounded diagnostic coverage of your own material. Every claim cites its scene.
-    <a href="/worlds/{{ world.id }}/report/diff">since last draft: {{ diff.banner }}</a></p>
+    <a href="/worlds/{{ world.id }}/report/diff">since last draft: {{ diff.banner }}</a>
+    {% if draft_count %}<a class="verify-pill" href="/worlds/{{ world.id }}/confirm"
+      title="uncertain extracted facts awaiting your ruling">Verify your canon ({{ draft_count }})</a>{% endif %}</p>
   <p class="kbd-hint muted small">keyboard: <kbd>j</kbd>/<kbd>k</kbd> next/prev note · <kbd>enter</kbd> expand · <kbd>s</kbd> seal · <kbd>d</kbd> dismiss</p>
 </div>
 
