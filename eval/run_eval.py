@@ -46,6 +46,24 @@ the finding from recall and false-positive scoring. Use `scene`, `where`,
 `line`, `quote`, or `supporting_quote` when available; the scorer falls back to
 the explanation text when locator metadata is absent.
 
+Coverage input (optional, Reader's Report):
+
+    {
+      "coverage_notes": [
+        {
+          "family": "F2",
+          "summary": "Mara's promise has no later reference.",
+          "body": "Set up in E104/sc2...",
+          "status": "open",
+          "evidence": {"citations": [{"label": "E104/sc2", "quote": "..."}]}
+        }
+      ]
+    }
+
+Required coverage fields: family plus summary/body or equivalent text fields.
+`sealed`, `dismissed`, and `addressed` notes are ignored. The scorer matches
+planted coverage items and decoys from fixtures/greyharbor/answer-key.md.
+
 Ground truth:
 
 By default this file parses fixtures/greyharbor/answer-key.md for the Phase 0
@@ -68,6 +86,8 @@ errors found, false positives <= 2 per episode, and no trap fired.
 Usage:
 
     python eval/run_eval.py --assertions out/assertions.json --findings out/findings.json
+    python eval/run_eval.py --assertions out/assertions.json --findings out/findings.json \\
+        --coverage out/coverage.json
     python eval/run_eval.py --demo
     python eval/run_eval.py --dump-ground-truth
     python eval/run_eval.py --expected eval/expected_greyharbor_s1.json \\
@@ -538,6 +558,34 @@ def _parse_traps(text: str) -> list[dict[str, Any]]:
     return traps
 
 
+def _split_mentions(cell: str) -> list[str]:
+    return [p.strip() for p in re.split(r",|;", cell or "") if p.strip()]
+
+
+def _parse_coverage_notes(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    section = _split_section(text, "## Coverage notes", "## Season 1 extension note")
+    expected: list[dict[str, Any]] = []
+    decoys: list[dict[str, Any]] = []
+    for cells in _table_rows(section):
+        if len(cells) < 5:
+            continue
+        cid = cells[0]
+        if not re.fullmatch(r"[CD]\d+", cid):
+            continue
+        item = {
+            "id": cid,
+            "family": cells[1].split()[0],
+            "where": _where(cells[2]) or cells[2],
+            "line": cells[3],
+            "must_mention": _split_mentions(cells[4]),
+        }
+        if cid.startswith("C"):
+            expected.append(item)
+        else:
+            decoys.append(item)
+    return expected, decoys
+
+
 def _object_synonyms(expected_assertions: list[dict[str, Any]]) -> dict[str, list[str]]:
     synonyms = {k: list(v) for k, v in DEFAULT_OBJECT_SYNONYMS.items()}
     for assertion in expected_assertions:
@@ -564,6 +612,7 @@ def parse_answer_key(path: Path = DEFAULT_ANSWER_KEY) -> dict[str, Any]:
     expected_findings = _parse_planted_errors(text, alias_map)
     expected_notes = _parse_expected_notes(text, alias_map)
     traps = _parse_traps(text)
+    expected_coverage, coverage_decoys = _parse_coverage_notes(text)
     return {
         "_comment": f"Parsed from {path}",
         "entities": entities,
@@ -572,11 +621,15 @@ def parse_answer_key(path: Path = DEFAULT_ANSWER_KEY) -> dict[str, Any]:
         "object_value_synonyms": _object_synonyms(expected_assertions),
         "expected_findings": expected_findings,
         "expected_notes": expected_notes,
+        "expected_coverage": expected_coverage,
+        "coverage_decoys_must_not_flag": coverage_decoys,
         "trap_findings_must_not_flag": traps,
         "thresholds": {
             "extraction_recall_min": 0.80,
             "planted_findings_recall_min": 1.0,
             "false_positives_per_episode_max": 2,
+            "coverage_recall_min": 1.0,
+            "coverage_precision_min": 1.0,
             "episode_count": _episode_count(expected_assertions, expected_findings),
         },
     }
@@ -691,6 +744,36 @@ def _finding_scene_refs(finding: dict[str, Any]) -> set[str]:
     return refs
 
 
+def _coverage_text(note: dict[str, Any]) -> str:
+    fields = [
+        "family",
+        "summary",
+        "body",
+        "explanation",
+        "where",
+        "scene",
+        "line",
+        "quote",
+        "supporting_quote",
+        "citation",
+        "source",
+        "note_key",
+    ]
+    parts = [str(note.get(k, "")) for k in fields if note.get(k) is not None]
+    ev = note.get("evidence")
+    if isinstance(ev, dict):
+        parts.append(json.dumps(ev, sort_keys=True))
+    return " ".join(parts)
+
+
+def _coverage_scene_refs(note: dict[str, Any]) -> set[str]:
+    refs: set[str] = set()
+    text = _coverage_text(note)
+    for m in re.finditer(r"\b(E\d{3})\s*/\s*sc(\d+)\b", text, flags=re.IGNORECASE):
+        refs.add(f"{m.group(1).upper()}/sc{int(m.group(2))}")
+    return refs
+
+
 def _tokens(text: Any) -> set[str]:
     return {t for t in norm(text).split() if t and t not in STOP_WORDS}
 
@@ -702,6 +785,16 @@ def _line_overlap(expected_line: str | None, finding: dict[str, Any]) -> bool:
     if len(expected) < 3:
         return False
     actual = _tokens(_finding_text(finding))
+    return len(expected & actual) / len(expected) >= 0.55
+
+
+def _coverage_line_overlap(expected_line: str | None, note: dict[str, Any]) -> bool:
+    if not expected_line:
+        return False
+    expected = _tokens(expected_line)
+    if len(expected) < 3:
+        return False
+    actual = _tokens(_coverage_text(note))
     return len(expected & actual) / len(expected) >= 0.55
 
 
@@ -726,6 +819,62 @@ def _trap_matches(finding: dict[str, Any], trap: dict[str, Any]) -> bool:
     if check and check != "*" and not _check_matches(finding.get("check"), check):
         return False
     return _mentions(finding, trap.get("must_not_mention_all") or [])
+
+
+def _coverage_family_matches(actual_family: Any, expected_family: str) -> bool:
+    actual = norm(actual_family)
+    expected = norm(expected_family)
+    aliases = {
+        "f1": {"f1", "open question", "open_question"},
+        "f2": {"f2", "idle setup", "idle_setup"},
+        "f3": {"f3", "dormant knowledge", "dormant_knowledge"},
+        "f4": {"f4", "unmotivated turn", "unmotivated_turn"},
+    }
+    return actual == expected or actual in aliases.get(expected, {expected})
+
+
+def _coverage_mentions(note: dict[str, Any], terms: list[str]) -> bool:
+    text = norm(_coverage_text(note))
+    return all(norm(t) in text for t in terms if norm(t))
+
+
+def _coverage_matches_expected(note: dict[str, Any], expected: dict[str, Any]) -> bool:
+    if not _coverage_family_matches(note.get("family"), expected["family"]):
+        return False
+    expected_where = expected.get("where")
+    expected_where = _where(str(expected_where)) if expected_where else None
+    if expected_where:
+        return expected_where in _coverage_scene_refs(note) or _coverage_line_overlap(expected.get("line"), note)
+    return _coverage_mentions(note, expected.get("must_mention") or [])
+
+
+def score_coverage(actual_notes: list[dict[str, Any]]) -> tuple[list[str], list[str], list[dict[str, Any]], list[tuple[str, str]]]:
+    live = [
+        n for n in actual_notes
+        if norm(n.get("status") or "open") not in {"sealed", "dismissed", "addressed"}
+    ]
+    found: list[str] = []
+    missed: list[str] = []
+    consumed: set[int] = set()
+    for exp in GT.get("expected_coverage", []):
+        hit = next(
+            (i for i, n in enumerate(live) if i not in consumed and _coverage_matches_expected(n, exp)),
+            None,
+        )
+        if hit is None:
+            missed.append(exp["id"])
+        else:
+            consumed.add(hit)
+            found.append(exp["id"])
+
+    decoy_hits: list[tuple[str, str]] = []
+    for decoy in GT.get("coverage_decoys_must_not_flag", []):
+        for note in live:
+            if _coverage_matches_expected(note, decoy):
+                decoy_hits.append((decoy["id"], _coverage_text(note)[:120]))
+
+    false_positives = [n for i, n in enumerate(live) if i not in consumed]
+    return found, missed, false_positives, decoy_hits
 
 
 def score_findings(actual_findings: list[dict[str, Any]]) -> tuple[list[str], list[str], list[dict[str, Any]], list[tuple[str, str]]]:
@@ -905,10 +1054,75 @@ def _print_report(
     return ok
 
 
+def _fmt_expected_coverage(item: dict[str, Any]) -> str:
+    where = f" @ {item['where']}" if item.get("where") else ""
+    line = f" | {item['line']}" if item.get("line") else ""
+    return f"{item['id']} {item['family']}{where}{line}"
+
+
+def _fmt_actual_coverage(note: dict[str, Any]) -> str:
+    scene = next(iter(_coverage_scene_refs(note)), None)
+    where = f" @ {scene}" if scene else ""
+    text = str(note.get("summary") or note.get("body") or _coverage_text(note)).strip()
+    if len(text) > 160:
+        text = text[:157] + "..."
+    return f"{note.get('family')}{where}: {text}"
+
+
+def _print_coverage_report(
+    found: list[str],
+    missed: list[str],
+    fps: list[dict[str, Any]],
+    decoy_hits: list[tuple[str, str]],
+) -> bool:
+    expected = GT.get("expected_coverage", [])
+    total = len(expected)
+    recall = len(found) / total if total else 1.0
+    precision_denom = len(found) + len(fps)
+    precision = len(found) / precision_denom if precision_denom else 1.0
+    thresholds = GT.get("thresholds", {})
+    ok = (
+        recall >= thresholds.get("coverage_recall_min", 1.0)
+        and precision >= thresholds.get("coverage_precision_min", 1.0)
+        and not decoy_hits
+    )
+    print("")
+    print("=" * 72)
+    print("READER'S REPORT COVERAGE EVAL")
+    print("=" * 72)
+    print(f"Coverage recall   : {recall:.1%} ({len(found)}/{total})")
+    print(f"Coverage precision: {precision:.1%} ({len(found)} TP / {len(fps)} FP)")
+    if missed:
+        print("")
+        print("Missed coverage items:")
+        by_id = {e["id"]: e for e in expected}
+        for cid in missed:
+            print(f"  - {_fmt_expected_coverage(by_id[cid])}")
+    if fps:
+        print("")
+        print("Spurious coverage notes:")
+        for note in fps:
+            print(f"  - {_fmt_actual_coverage(note)}")
+    if decoy_hits:
+        print("")
+        print("Coverage decoy violations:")
+        for cid, text in decoy_hits:
+            print(f"  - {cid}: {text}")
+    print("")
+    print("Coverage gates:")
+    print(f"  [{'PASS' if recall >= thresholds.get('coverage_recall_min', 1.0) else 'FAIL'}] coverage recall")
+    print(f"  [{'PASS' if precision >= thresholds.get('coverage_precision_min', 1.0) else 'FAIL'}] coverage precision")
+    print(f"  [{'PASS' if not decoy_hits else 'FAIL'}] no coverage decoys flagged")
+    print("=" * 72)
+    print("COVERAGE GATES: " + ("ALL PASS" if ok else "NOT YET"))
+    return ok
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Score Canon AI pipeline output against Greyharbor ground truth.")
     parser.add_argument("--assertions", type=Path, help="Pipeline assertion JSON.")
     parser.add_argument("--findings", type=Path, help="Pipeline check findings JSON.")
+    parser.add_argument("--coverage", type=Path, help="Optional Reader's Report coverage_notes JSON.")
     parser.add_argument("--demo", action="store_true", help="Score bundled deliberately degraded sample output.")
     parser.add_argument("--answer-key", type=Path, default=DEFAULT_ANSWER_KEY, help="Markdown answer key to parse.")
     parser.add_argument("--expected", type=Path, help="Machine-readable ground-truth JSON. Overrides --answer-key.")
@@ -949,6 +1163,13 @@ def main(argv: list[str] | None = None) -> int:
         fps=fps,
         trap_hits=trap_hits,
     )
+    if args.coverage:
+        coverage_doc = _load_json(args.coverage)
+        actual_coverage = coverage_doc.get("coverage_notes") or coverage_doc.get("notes")
+        if not isinstance(actual_coverage, list):
+            raise SystemExit(f"{args.coverage} must contain a 'coverage_notes' array")
+        cov_found, cov_missed, cov_fps, cov_decoys = score_coverage(actual_coverage)
+        ok = _print_coverage_report(cov_found, cov_missed, cov_fps, cov_decoys) and ok
     return 0 if ok else 1
 
 
@@ -961,11 +1182,15 @@ except FileNotFoundError:
         "object_value_synonyms": {},
         "expected_findings": [],
         "expected_notes": [],
+        "expected_coverage": [],
+        "coverage_decoys_must_not_flag": [],
         "trap_findings_must_not_flag": [],
         "thresholds": {
             "extraction_recall_min": 0.80,
             "planted_findings_recall_min": 1.0,
             "false_positives_per_episode_max": 2,
+            "coverage_recall_min": 1.0,
+            "coverage_precision_min": 1.0,
             "episode_count": 1,
         },
     }
