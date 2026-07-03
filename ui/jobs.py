@@ -368,10 +368,22 @@ async def upload_script(request: Request,
     try:
         info = canon_ingest.load_into(conn, world_name, works, reset=not creating)
         if creating:
-            wcur = conn.cursor()
-            wcur.execute("UPDATE worlds SET owner_id = %s WHERE id = %s",
-                         (user.id, info["world_id"]))
-            conn.commit()
+            # Owner attribution is best-effort: worlds.owner_id FKs auth.users,
+            # but the AUTH_DISABLED dev user has no auth.users row, and a
+            # plain-postgres dev DB may lack the auth schema entirely. Pre-auth
+            # worlds keep owner_id NULL by design (identity migration); access
+            # still flows through world_members/RLS. load_into commits its own
+            # work, so a failed attribution never rolls back the ingest.
+            try:
+                wcur = conn.cursor()
+                wcur.execute("SELECT 1 FROM auth.users WHERE id = %s", (user.id,))
+                if wcur.fetchone():
+                    wcur.execute("UPDATE worlds SET owner_id = %s WHERE id = %s",
+                                 (user.id, info["world_id"]))
+                conn.commit()
+            except Exception:
+                with contextlib.suppress(Exception):
+                    conn.rollback()
     finally:
         with contextlib.suppress(Exception):
             conn.close()
