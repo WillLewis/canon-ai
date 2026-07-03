@@ -1,0 +1,104 @@
+{# Note-surface fragments (P3-SURFACE). Imported `with context` so `world`,
+   `can_edit`, `ask_q`, `ask_result` are in scope. Rendering only — every line
+   here displays engine-written rows; nothing is generated. #}
+
+{%- macro fam_badge(family) -%}
+<span class="badge fam-{{ family }}">{{ family }} · {{ FAMILY_LABELS[family] }}</span>
+{%- endmacro -%}
+
+{# Citation chip into the script view: server-side anchor + quote highlight;
+   surface.js upgrades clicks inside the script view to in-page jumps. #}
+{%- macro note_cite(c) -%}
+<a class="cite qcite" data-scene="{{ c.scene_id }}" data-quote="{{ c.quote or '' }}"
+   href="/worlds/{{ world.id }}/script?scene={{ c.scene_id }}&quote={{ (c.quote or '')|urlencode }}#scene-{{ c.scene_id }}">
+  <span class="cite-ep">{{ c.label or ('scene ' ~ c.scene_id) }}</span>
+  {% if c.assertion_id %}<span class="cite-pos">#{{ c.assertion_id }}</span>{% endif %}
+</a>
+{%- endmacro -%}
+
+{# One coverage note: summary collapsed, evidence + citations on expand,
+   the four actions (Seal / Dismiss / Show me / Ask), no modals.
+   `view` names the hosting page so Ask returns to the right pane. #}
+{%- macro note_card(n, view='report', open=False) -%}
+<details class="note" id="note-{{ n.id }}" data-note-id="{{ n.id }}" data-status="{{ n.status }}"
+         {% if open %}open{% endif %}>
+  <summary class="note-summary">
+    <span class="note-fam badge fam-{{ n.family }}" title="{{ FAMILY_LABELS[n.family] }}">{{ n.family }}</span>
+    <span class="note-line">{{ n.summary }}</span>
+    {% if n.status != 'open' %}<span class="badge status-{{ n.status }}">{{ n.status }}</span>{% endif %}
+  </summary>
+  <div class="note-body">
+    <p class="note-evidence">{{ n.body }}</p>
+    {% if n.citations %}
+    <div class="note-cites">
+      <span class="lbl">cites</span>
+      {% for c in n.citations %}{{ note_cite(c) }}{% endfor %}
+    </div>
+    {% endif %}
+    {% if n.status == 'open' %}
+    <div class="note-actions">
+      <form method="post" action="/worlds/{{ world.id }}/notes/{{ n.id }}/seal" class="act seal-form">
+        <button type="submit" class="btn-note btn-note-seal" {% if not can_edit %}disabled
+          title="requires the editor role"{% else %}title="intentional — permanent, never re-raised (s)"{% endif %}>Seal</button>
+      </form>
+      <form method="post" action="/worlds/{{ world.id }}/notes/{{ n.id }}/dismiss" class="act dismiss-form">
+        <button type="submit" class="btn-note btn-note-dismiss" {% if not can_edit %}disabled
+          title="requires the editor role"{% else %}title="wrong — permanent, never re-raised (d)"{% endif %}>Dismiss</button>
+      </form>
+      {% if n.show_url %}<a class="btn-note btn-note-show" href="{{ n.show_url }}" title="jump to the cited scene">Show me</a>{% endif %}
+      <a class="btn-note btn-note-ask"
+         href="/worlds/{{ world.id }}/{{ view }}?ask={{ n.ask_seed|urlencode }}#ask-pane"
+         title="ask the bible about this note's entities">Ask</a>
+    </div>
+    {% else %}
+    <p class="note-ruling muted small">
+      {{ n.status }}{% if n.status_changed_at %} · {{ n.status_changed_at }}{% endif %} — permanent; this note will never re-raise.
+    </p>
+    {% endif %}
+  </div>
+</details>
+{%- endmacro -%}
+
+{# The ask-the-bible pane, docked on both views. POSTs to the ask engine
+   (SQL templates only) and renders the cited answer — or the refusal, honestly. #}
+{%- macro ask_pane(view='report', scene=None, quote=None) -%}
+<section class="panel askpane" id="ask-pane">
+  <h2>Ask the bible</h2>
+  <form method="post" action="/worlds/{{ world.id }}/ask" class="ask-form">
+    <input type="hidden" name="view" value="{{ view }}">
+    {% if scene %}<input type="hidden" name="scene" value="{{ scene }}">{% endif %}
+    {% if quote %}<input type="hidden" name="quote" value="{{ quote }}">{% endif %}
+    <input type="text" name="question" value="{{ ask_q or '' }}" autocomplete="off"
+           placeholder="what does Mara know about the ledger…" aria-label="Ask the bible">
+    <button type="submit">Ask</button>
+  </form>
+  {% if ask_result %}
+  <div class="ask-result ask-{{ ask_result.status }}">
+    {% if ask_result.status == 'answered' %}
+      <ul class="ask-rows">
+        {% for row in ask_result.rows %}
+        <li>
+          <span class="ask-fact">{{ row.subject }} <span class="pred">{{ row.predicate }}</span>
+            {% if row.object %}{{ row.object }}{% endif %}
+            {% if row.from_pos is not none %}<span class="chip">from pos {{ row.from_pos }}</span>{% endif %}
+          </span>
+          {% if row.supporting_quote %}<blockquote class="quote">“{{ row.supporting_quote }}”</blockquote>{% endif %}
+          <a class="cite qcite" data-scene="{{ row.scene_id }}" data-quote="{{ row.supporting_quote or '' }}"
+             href="/worlds/{{ world.id }}/script?scene={{ row.scene_id }}&quote={{ (row.supporting_quote or '')|urlencode }}#scene-{{ row.scene_id }}">
+            <span class="cite-ep">{{ row.citation_label }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% if ask_result.truncated %}<p class="muted small">… truncated.</p>{% endif %}
+      <p class="ask-cited small">cited: {{ ask_result.citations | join(' · ') }}</p>
+    {% elif ask_result.status == 'no_support' %}
+      <p class="ask-refusal">Cannot answer from cited canon: {{ ask_result.reason }}.</p>
+    {% else %}
+      <p class="ask-refusal">Refused: {{ ask_result.reason }}.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+  <p class="muted small">Answers come from the graph with citations, or not at all.</p>
+</section>
+{%- endmacro -%}

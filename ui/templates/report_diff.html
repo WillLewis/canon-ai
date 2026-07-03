@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Draft diff · {{ world.name }}{% endblock %}
+{% block bodyclass %}surface{% endblock %}
+{% block foottag %}Draft-2 diff — resolution is computed by the graph, never claimed by the writer.{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="crumb"><a href="/worlds/{{ world.id }}/report">Reader's Report</a> /</div>
+  <h1>Since your last draft</h1>
+</div>
+
+<section class="panel diff-banner" id="diff-banner">
+  <p class="diff-line">{{ diff.banner }}</p>
+  <p class="muted small">"Resolved" means a later run found the gap closed in your pages — Canon noticed the rewrite; you didn't have to tell it.</p>
+</section>
+
+<section class="panel" id="diff-resolved">
+  <h2>Resolved (addressed) <span class="count">{{ diff.resolved|length }}</span></h2>
+  {% for n in diff.resolved %}
+  <div class="diff-note">
+    <span class="badge fam-{{ n.family }}">{{ n.family }}</span>
+    <span class="note-line">{{ n.summary }}</span>
+    {% if n.resolved_at %}<span class="muted small">resolved {{ n.resolved_at }}</span>{% endif %}
+  </div>
+  {% else %}<p class="muted">Nothing resolved since the previous run.</p>{% endfor %}
+</section>
+
+<section class="panel" id="diff-new">
+  <h2>New this draft <span class="count">{{ diff.new|length }}</span></h2>
+  {% for n in diff.new %}
+  <div class="diff-note">
+    <span class="badge fam-{{ n.family }}">{{ n.family }}</span>
+    <a class="note-line" href="/worlds/{{ world.id }}/report#note-{{ n.id }}">{{ n.summary }}</a>
+  </div>
+  {% else %}<p class="muted">No new notes in the current run.</p>{% endfor %}
+</section>
+
+<section class="panel" id="diff-sealed">
+  <h2>Sealed <span class="count">{{ diff.sealed|length }}</span>
+    <span class="sub-inline">— ruled intentional; never re-raised</span></h2>
+  {% for n in diff.sealed %}
+  <div class="diff-note">
+    <span class="badge fam-{{ n.family }}">{{ n.family }}</span>
+    <span class="note-line">{{ n.summary }}</span>
+  </div>
+  {% else %}<p class="muted">No sealed notes.</p>{% endfor %}
+</section>
+
+{% if diff.dismissed %}
+<section class="panel" id="diff-dismissed">
+  <h2>Dismissed <span class="count">{{ diff.dismissed|length }}</span>
+    <span class="sub-inline">— ruled wrong; never re-raised</span></h2>
+  {% for n in diff.dismissed %}
+  <div class="diff-note">
+    <span class="badge fam-{{ n.family }}">{{ n.family }}</span>
+    <span class="note-line">{{ n.summary }}</span>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% endblock %}

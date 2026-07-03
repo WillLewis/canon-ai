@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import auth, db
+from . import notes as note_vm
 from .format import gloss_range, highlight, object_side, quote_present, SEVERITY_RANK
 
 _HERE = Path(__file__).resolve().parent
@@ -38,6 +39,8 @@ templates.env.globals["object_side"] = object_side
 templates.env.globals["quote_present"] = quote_present
 templates.env.globals["SEVERITY_RANK"] = SEVERITY_RANK
 templates.env.filters["highlight"] = highlight
+templates.env.globals["FAMILY_LABELS"] = note_vm.FAMILY_LABELS
+templates.env.globals["FAMILIES"] = note_vm.FAMILIES
 
 PER_PAGE = 100
 
@@ -261,6 +264,163 @@ async def unseal(request: Request, finding_id: int, world: str | None = None,
     db.unseal_finding(active["id"], finding_id)
     return RedirectResponse(
         url=f"/findings/{finding_id}?world={active['name']}", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Note surface (P3-SURFACE) — the writer-facing Reader's Report views.
+# World-scoped by path id: /worlds/{world_id}/... . Read views stay open
+# (viewers see everything, action buttons disabled); the two note writes and
+# nothing else gate on the editor role. No LLM calls anywhere below — the
+# engine wrote the rows, these routes only render them.
+# ---------------------------------------------------------------------------
+
+def _surface_world(world_id: int) -> tuple[dict | None, list[dict]]:
+    worlds = db.list_worlds()
+    active = next((w for w in worlds if w["id"] == world_id), None)
+    return active, worlds
+
+
+def _surface_role(request: Request, world_id: int) -> tuple[str | None, bool]:
+    """(role, can_edit) for read views — never raises; anonymous = read-only."""
+    user = auth.peek_user(request, world_id)
+    role = user.role if user else None
+    return role, auth.has_role(role, "editor")
+
+
+def _live_first(findings: list[dict]) -> tuple[list[dict], list[dict]]:
+    live = [f for f in findings if not f.get("sealed")]
+    sealed = [f for f in findings if f.get("sealed")]
+    return live, sealed
+
+
+def _report_context(request: Request, world_id: int,
+                    ask_q: str = "", ask_result=None) -> dict | None:
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return None
+    notes = db.list_coverage_notes(world_id)
+    names = db.entity_names(world_id, note_vm.all_entity_ids(notes))
+    note_vm.decorate_notes(world_id, notes, names)
+    grouped = note_vm.split_notes(notes)
+    live, sealed_findings = _live_first(db.list_findings(world_id))
+    role, can_edit = _surface_role(request, world_id)
+    return {
+        "world": active, "worlds": worlds, "nav": "report",
+        "grouped": grouped,
+        "findings_live": live[: note_vm.FINDINGS_CAP],
+        "findings_more": max(0, len(live) - note_vm.FINDINGS_CAP),
+        "findings_sealed_n": len(sealed_findings),
+        "load_bearing": db.load_bearing(world_id, note_vm.LOAD_BEARING_CAP),
+        "summary": db.world_summary(world_id),
+        "diff": note_vm.diff_summary(notes),
+        "role": role, "can_edit": can_edit,
+        "ask_q": ask_q, "ask_result": ask_result,
+    }
+
+
+@app.get("/worlds/{world_id}/report", response_class=HTMLResponse)
+def report_view(request: Request, world_id: int, ask: str | None = None):
+    ctx = _report_context(request, world_id, ask_q=ask or "")
+    if ctx is None:
+        return _no_world(request, db.list_worlds())
+    return templates.TemplateResponse(request, "report.html", ctx)
+
+
+@app.get("/worlds/{world_id}/report/diff", response_class=HTMLResponse)
+def report_diff(request: Request, world_id: int):
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return _no_world(request, worlds)
+    notes = db.list_coverage_notes(world_id)
+    note_vm.decorate_notes(world_id, notes)
+    return templates.TemplateResponse(request, "report_diff.html", {
+        "world": active, "worlds": worlds, "nav": "report",
+        "diff": note_vm.diff_summary(notes),
+    })
+
+
+def _script_context(request: Request, world_id: int, scene: int | None,
+                    quote: str | None, ask_q: str = "", ask_result=None) -> dict | None:
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return None
+    scenes = db.list_scenes_with_text(world_id)
+    notes = db.list_coverage_notes(world_id)
+    names = db.entity_names(world_id, note_vm.all_entity_ids(notes))
+    note_vm.decorate_notes(world_id, notes, names)
+    by_scene = note_vm.notes_by_scene(notes)
+    findings_by_scene: dict[int, list[dict]] = {}
+    live, _sealed = _live_first(db.list_findings(world_id))
+    for f in live:
+        if f.get("scene_id"):
+            findings_by_scene.setdefault(f["scene_id"], []).append(f)
+    role, can_edit = _surface_role(request, world_id)
+    return {
+        "world": active, "worlds": worlds, "nav": "script",
+        "scenes": scenes,
+        "notes_by_scene": by_scene,
+        "findings_by_scene": findings_by_scene,
+        "focus_scene": scene,
+        "focus_quote": quote or None,
+        "role": role, "can_edit": can_edit,
+        "ask_q": ask_q, "ask_result": ask_result,
+    }
+
+
+@app.get("/worlds/{world_id}/script", response_class=HTMLResponse)
+def script_view(request: Request, world_id: int, scene: int | None = None,
+                quote: str | None = None, ask: str | None = None):
+    ctx = _script_context(request, world_id, scene, quote, ask_q=ask or "")
+    if ctx is None:
+        return _no_world(request, db.list_worlds())
+    return templates.TemplateResponse(request, "script.html", ctx)
+
+
+async def _note_status_change(request: Request, world_id: int, note_id: str,
+                              status: str, user: auth.User):
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return _no_world(request, worlds)
+    db.set_note_status(world_id, note_id, status, changed_by=user.id)
+    return RedirectResponse(url=f"/worlds/{world_id}/report", status_code=303)
+
+
+@app.post("/worlds/{world_id}/notes/{note_id}/seal")
+async def seal_note(request: Request, world_id: int, note_id: str,
+                    user: auth.User = Depends(auth.require_role("editor"))):
+    """Writer ruled the flagged thing intentional. Permanent: never re-raised."""
+    return await _note_status_change(request, world_id, note_id, "sealed", user)
+
+
+@app.post("/worlds/{world_id}/notes/{note_id}/dismiss")
+async def dismiss_note(request: Request, world_id: int, note_id: str,
+                       user: auth.User = Depends(auth.require_role("editor"))):
+    """Writer ruled the note wrong. Permanent, one keystroke, no guilt-trip."""
+    return await _note_status_change(request, world_id, note_id, "dismissed", user)
+
+
+@app.post("/worlds/{world_id}/ask", response_class=HTMLResponse)
+async def ask_pane(request: Request, world_id: int):
+    """The ask-the-bible pane. Calls ask/engine.py (SQL templates, no LLM) and
+    re-renders whichever view hosted the pane, answer + citations included.
+    Refusals render verbatim — an uncited answer never ships."""
+    form = await _form(request)
+    question = (form.get("question") or "").strip()
+    view = form.get("view") or "report"
+    result = db.ask_question(world_id, question) if question else None
+    if view == "script":
+        scene = form.get("scene")
+        ctx = _script_context(request, world_id,
+                              int(scene) if (scene or "").isdigit() else None,
+                              form.get("quote") or None,
+                              ask_q=question, ask_result=result)
+        template = "script.html"
+    else:
+        ctx = _report_context(request, world_id, ask_q=question, ask_result=result)
+        template = "report.html"
+    if ctx is None:
+        return _no_world(request, db.list_worlds())
+    return templates.TemplateResponse(request, template, ctx)
 
 
 def main() -> None:

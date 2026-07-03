@@ -6,11 +6,13 @@
   <title>{% block title %}Canon · Triage Workbench{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
 <header class="topbar">
   <div class="brand"><a href="/{% if world %}?world={{ world.name|urlencode }}{% endif %}">Canon<span class="dot">·</span>Workbench</a></div>
   {% if world %}
   <nav class="mainnav">
+    <a href="/worlds/{{ world.id }}/report" class="{{ 'on' if nav=='report' }}">Report</a>
+    <a href="/worlds/{{ world.id }}/script" class="{{ 'on' if nav=='script' }}">Script</a>
     <a href="/?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='overview' }}">Overview</a>
     <a href="/entities?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='entities' }}">Entities</a>
     <a href="/assertions?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='assertions' }}">Assertions</a>
@@ -33,8 +35,9 @@
 </main>
 
 <footer class="foot">
-  <span>Read-only inspector — a microscope for the engine.</span>
+  <span>{% block foottag %}Read-only inspector — a microscope for the engine.{% endblock %}</span>
   <span class="rule">Canon never writes story · every claim cites its source.</span>
 </footer>
+{% block scripts %}{% endblock %}
 </body>
 </html>

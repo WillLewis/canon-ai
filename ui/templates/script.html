@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% import "_surface.html" as sf with context %}
+{% block title %}Script · {{ world.name }}{% endblock %}
+{% block bodyclass %}surface script-page{% endblock %}
+{% block foottag %}Script-first view — your words stay center-stage; Canon annotates in the margin.{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Script <span class="sub-inline">— {{ world.name }}</span></h1>
+  <p class="sub">Left: your script, scene by scene. Right: findings and notes anchored to the scene in view. Click any citation to jump to the quoted line.</p>
+</div>
+
+<div class="split">
+  <div class="script-col" id="script-col">
+    {% set ns = namespace(work=None) %}
+    {% for s in scenes %}
+    {% if s.work_id != ns.work %}{% set ns.work = s.work_id %}
+    <h2 class="script-work" id="work-{{ s.work_id }}">{{ s.episode_title }}</h2>
+    {% endif %}
+    {% set anchors = (notes_by_scene.get(s.id, [])|length) + (findings_by_scene.get(s.id, [])|length) %}
+    <section class="scene-block {{ 'has-notes' if anchors }} {{ 'is-focus' if s.id == focus_scene }}"
+             id="scene-{{ s.id }}" data-scene-id="{{ s.id }}">
+      <div class="scene-head">
+        {% if anchors %}<a class="gutter-mark" href="#anchors-{{ s.id }}" title="{{ anchors }} note{{ 's' if anchors != 1 }} anchored here">{{ anchors }}</a>{% endif %}
+        <span class="scene-slug">{{ s.slug or '(no slug)' }}</span>
+        <span class="scene-pos mono">pos {{ s.story_position }}</span>
+        {% if s.is_flashback %}<span class="badge flashback">flashback</span>{% endif %}
+        <a class="scene-open small" href="/scenes/{{ s.id }}{{ m.wq() }}">inspect</a>
+      </div>
+      <pre class="scene-text" id="scene-text-{{ s.id }}">{{ s.raw_text | highlight(focus_quote if s.id == focus_scene else None) }}</pre>
+    </section>
+    {% endfor %}
+    {% if not scenes %}<section class="panel"><p class="muted">No scenes loaded for this world.</p></section>{% endif %}
+  </div>
+
+  <aside class="anno-col" id="anno-col">
+    {{ sf.ask_pane(view='script', scene=focus_scene, quote=focus_quote) }}
+
+    {% for s in scenes %}
+    {% set snotes = notes_by_scene.get(s.id, []) %}
+    {% set sfindings = findings_by_scene.get(s.id, []) %}
+    {% if snotes or sfindings %}
+    <section class="panel anno-group" id="anchors-{{ s.id }}" data-scene-id="{{ s.id }}">
+      <h2><a href="#scene-{{ s.id }}" class="anno-scene-link">{{ s.slug or 'scene ' ~ s.id }}</a>
+        <span class="count">pos {{ s.story_position }}</span></h2>
+      {% for f in sfindings %}
+      <div class="anno-finding">
+        {{ m.severity_badge(f.severity) }}
+        <a class="check" href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a>
+        <span class="expl small">{{ f.explanation }}</span>
+      </div>
+      {% endfor %}
+      {% for n in snotes %}{{ sf.note_card(n, view='script') }}{% endfor %}
+    </section>
+    {% endif %}
+    {% endfor %}
+
+    {% if not notes_by_scene and not findings_by_scene %}
+    <section class="panel"><p class="muted">No open notes or findings anchor to these scenes.</p></section>
+    {% endif %}
+  </aside>
+</div>
+
+{% endblock %}
+{% block scripts %}<script src="/static/surface.js"></script>{% endblock %}

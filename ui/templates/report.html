@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% import "_surface.html" as sf with context %}
+{% block title %}Reader's Report · {{ world.name }}{% endblock %}
+{% block bodyclass %}surface{% endblock %}
+{% block foottag %}Reader's Report — findings and questions with receipts; the writer is the only generator.{% endblock %}
+{% block content %}
+
+<div class="page-head report-head">
+  <h1>Reader's Report <span class="sub-inline">— {{ world.name }}</span></h1>
+  <p class="sub">Grounded diagnostic coverage of your own material. Every claim cites its scene.
+    <a href="/worlds/{{ world.id }}/report/diff">since last draft: {{ diff.banner }}</a></p>
+  <p class="kbd-hint muted small">keyboard: <kbd>j</kbd>/<kbd>k</kbd> next/prev note · <kbd>enter</kbd> expand · <kbd>s</kbd> seal · <kbd>d</kbd> dismiss</p>
+</div>
+
+<div class="cols">
+  <div class="col-main">
+
+    <section class="panel" id="continuity-findings">
+      <h2>1 · Continuity findings <span class="count">{{ findings_live|length }}{% if findings_more %} of {{ findings_live|length + findings_more }}{% endif %} live</span>
+        <a class="seeall" href="/findings{{ m.wq() }}">all findings →</a></h2>
+      {% if findings_live %}
+      <ul class="finding-list report-findings">
+        {% for f in findings_live %}
+        <li>{{ m.severity_badge(f.severity) }}
+          <a class="check" href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a>
+          <span class="expl">{{ f.explanation }}</span>
+          {% if f.scene_id %}
+          <a class="cite qcite" data-scene="{{ f.scene_id }}" data-quote=""
+             href="/worlds/{{ world.id }}/script?scene={{ f.scene_id }}#scene-{{ f.scene_id }}">
+            <span class="cite-ep">{{ f.scene_slug or ('scene ' ~ f.scene_id) }}</span>
+          </a>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% if findings_more %}<p class="muted small">{{ findings_more }} more in the <a href="/findings{{ m.wq() }}">findings view</a>.</p>{% endif %}
+      {% else %}
+      <p class="muted">No live continuity findings.{% if findings_sealed_n %} {{ findings_sealed_n }} sealed.{% endif %}</p>
+      {% endif %}
+    </section>
+
+    <section class="panel" id="load-bearing-canon">
+      <h2>2 · Load-bearing canon <span class="count">{{ load_bearing|length }}</span></h2>
+      {% if load_bearing %}
+      <ul class="lb-list">
+        {% for e in load_bearing %}
+        <li>{{ m.kind_badge(e.kind) }} {{ m.entity_link(e.id, e.name) }}
+          <span class="muted">{{ e.n_assertions }} assertion{{ 's' if e.n_assertions != 1 }} across {{ e.n_scenes }} cited scene{{ 's' if e.n_scenes != 1 }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No assertions loaded yet.</p>{% endif %}
+    </section>
+
+    {% for family in FAMILIES %}
+    {% set rows = grouped.open_by_family[family] %}
+    <section class="panel note-section" id="family-{{ family }}">
+      <h2>{{ loop.index + 2 }} · {{ FAMILY_LABELS[family] }} <span class="count">{{ rows|length }}</span></h2>
+      {% for n in rows %}{{ sf.note_card(n, view='report') }}{% else %}
+      <p class="muted">No open notes.</p>{% endfor %}
+    </section>
+    {% endfor %}
+
+    <section class="panel" id="corpus-appendix">
+      <h2>7 · Corpus appendix</h2>
+      {% set t = summary.totals %}
+      <dl class="kv">
+        <dt>Scenes</dt><dd>{{ t.scenes }} across {{ t.works }} work{{ 's' if t.works != 1 }}</dd>
+        <dt>Entities</dt><dd>{{ t.entities }}</dd>
+        <dt>Assertions</dt><dd>{{ t.assertions }}
+          <span class="muted small">{% for s in summary.assertions_by_status %}{{ s.status }} {{ s.n }}{% if not loop.last %} · {% endif %}{% endfor %}</span></dd>
+        <dt>Findings</dt><dd>{{ t.findings_live }} live · {{ t.findings_sealed }} sealed</dd>
+        <dt>Open notes</dt><dd>{{ grouped.n_open }}{% if grouped.overflow %} shown (+{{ grouped.overflow }} below the caps){% endif %}</dd>
+      </dl>
+    </section>
+
+    {% if grouped.settled %}
+    <section class="panel settled-panel" id="settled-notes">
+      <h2>Settled <span class="count">{{ grouped.settled|length }}</span>
+        <span class="sub-inline">— sealed or dismissed; permanent, never re-raised</span></h2>
+      {% for n in grouped.settled %}{{ sf.note_card(n, view='report') }}{% endfor %}
+    </section>
+    {% endif %}
+
+  </div>
+
+  <aside class="col-side">
+    {{ sf.ask_pane(view='report') }}
+  </aside>
+</div>
+
+{% endblock %}
+{% block scripts %}<script src="/static/surface.js"></script>{% endblock %}
