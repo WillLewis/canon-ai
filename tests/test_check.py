@@ -38,9 +38,15 @@ def test_split_checks_finds_all_seven_named_checks():
     names = [n for n, _ in parsed]
     assert names == [
         "dead_speaker", "presence_conflict", "premature_knowledge",
-        "destroyed_location_use", "capability_violation", "dangling_reference",
+        "destroyed_location_use", "dangling_reference", "capability_violation",
         "idle_setup",
     ]
+
+
+def test_every_check_honors_world_family_config():
+    for name, stmt in check.split_checks(CHECKS_SQL):
+        assert "world_family_config" in stmt, name
+        assert f"'{name}'" in stmt
 
 
 def test_to_psycopg_escapes_format_percent_and_binds_world_id():
