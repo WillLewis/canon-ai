@@ -32,6 +32,8 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from billing import gating as billing_gating  # noqa: E402  (import only — P3-WIRING)
+from billing import store as billing_store  # noqa: E402
 from canon import rules as rules_engine  # noqa: E402  (no LLM in there — grep-guarded)
 from canon import rules_store  # noqa: E402
 from canon.ingest import connect  # noqa: E402  (read/write the same DB the pipeline loads)
@@ -43,6 +45,25 @@ router = APIRouter()
 
 _HERE = pathlib.Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_HERE / "templates"))
+
+
+# ---------------------------------------------------------------------------
+# Plan gate (P3-WIRING): rule authoring is a paid feature (docs/readers-
+# report.md "Unit economics"). Only the three WRITE routes gate — reads stay
+# open to every member. Free users get 402 with the /billing upgrade path
+# (plan_gate builds that body); CANON_FORCE_TIER=paid is the dev override.
+# ---------------------------------------------------------------------------
+
+def _billing_cursor_factory():
+    # Resolved through the db module at call time so tests can fake db.ops_cursor.
+    return db.ops_cursor()
+
+
+# Module attribute (not a closure) so tests can swap in a fake tier resolver.
+rule_tier_resolver = billing_store.make_tier_resolver(_billing_cursor_factory)
+
+_paid_gate = billing_gating.plan_gate(
+    "rule_authoring", tier_resolver=lambda user: rule_tier_resolver(user))
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +267,8 @@ def rules_page(request: Request, world_id: int):
 
 @router.post("/worlds/{world_id}/rules")
 async def create_rule(request: Request, world_id: int,
-                      user: auth.User = Depends(auth.require_role("editor"))):
+                      user: auth.User = Depends(auth.require_role("editor")),
+                      _paid: auth.User = Depends(_paid_gate)):
     """Create one structured rule. Anything the closed vocabulary can't express
     unambiguously is a 400 right here — rejected at creation, never guessed."""
     form = await _form(request)
@@ -260,7 +282,8 @@ async def create_rule(request: Request, world_id: int,
 
 @router.post("/worlds/{world_id}/rules/{rule_id}/toggle")
 async def toggle_rule(request: Request, world_id: int, rule_id: str,
-                      user: auth.User = Depends(auth.require_role("editor"))):
+                      user: auth.User = Depends(auth.require_role("editor")),
+                      _paid: auth.User = Depends(_paid_gate)):
     """Enable/disable without deleting — a disabled rule never runs."""
     form = await _form(request)
     store_set_enabled(world_id, rule_id, form.get("enabled") == "1")
@@ -269,6 +292,7 @@ async def toggle_rule(request: Request, world_id: int, rule_id: str,
 
 @router.post("/worlds/{world_id}/rules/{rule_id}/delete")
 async def delete_rule(request: Request, world_id: int, rule_id: str,
-                      user: auth.User = Depends(auth.require_role("editor"))):
+                      user: auth.User = Depends(auth.require_role("editor")),
+                      _paid: auth.User = Depends(_paid_gate)):
     store_delete(world_id, rule_id)
     return RedirectResponse(url=f"/worlds/{world_id}/rules", status_code=303)

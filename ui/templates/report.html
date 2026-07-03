@@ -9,10 +9,12 @@
 <div class="page-head report-head">
   <h1>Reader's Report <span class="sub-inline">— {{ world.name }}</span></h1>
   <p class="sub">Grounded diagnostic coverage of your own material. Every claim cites its scene.
+    {% if not share_mode %}
     <a href="/worlds/{{ world.id }}/report/diff">since last draft: {{ diff.banner }}</a>
     {% if draft_count %}<a class="verify-pill" href="/worlds/{{ world.id }}/confirm"
-      title="uncertain extracted facts awaiting your ruling">Verify your canon ({{ draft_count }})</a>{% endif %}</p>
-  <p class="kbd-hint muted small">keyboard: <kbd>j</kbd>/<kbd>k</kbd> next/prev note · <kbd>enter</kbd> expand · <kbd>s</kbd> seal · <kbd>d</kbd> dismiss</p>
+      title="uncertain extracted facts awaiting your ruling">Verify your canon ({{ draft_count }})</a>{% endif %}
+    {% endif %}</p>
+  {% if not share_mode %}<p class="kbd-hint muted small">keyboard: <kbd>j</kbd>/<kbd>k</kbd> next/prev note · <kbd>enter</kbd> expand · <kbd>s</kbd> seal · <kbd>d</kbd> dismiss</p>{% endif %}
 </div>
 
 <div class="cols">
@@ -20,12 +22,13 @@
 
     <section class="panel" id="continuity-findings">
       <h2>1 · Continuity findings <span class="count">{{ findings_live|length }}{% if findings_more %} of {{ findings_live|length + findings_more }}{% endif %} live</span>
-        <a class="seeall" href="/findings{{ m.wq() }}">all findings →</a></h2>
+        {% if not share_mode %}<a class="seeall" href="/findings{{ m.wq() }}">all findings →</a>{% endif %}</h2>
       {% if findings_live %}
       <ul class="finding-list report-findings">
         {% for f in findings_live %}
         <li>{{ m.severity_badge(f.severity) }}
-          <a class="check" href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a>
+          {% if f.id and not share_mode %}<a class="check" href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a>
+          {% else %}<span class="check">{{ f.check_name }}</span>{% endif %}
           <span class="expl">{{ f.explanation }}</span>
           {% if f.scene_id %}
           <a class="cite qcite" data-scene="{{ f.scene_id }}" data-quote=""
@@ -86,10 +89,12 @@
 
   </div>
 
+  {% if not share_mode %}
   <aside class="col-side">
     {{ sf.ask_pane(view='report') }}
   </aside>
+  {% endif %}
 </div>
 
 {% endblock %}
-{% block scripts %}<script src="/static/surface.js"></script>{% endblock %}
+{% block scripts %}{% if not share_mode %}<script src="/static/surface.js"></script>{% endif %}{% endblock %}

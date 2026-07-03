@@ -14,7 +14,7 @@
 {% macro finding_row(f) %}
 <tr class="{{ 'is-sealed' if f.sealed }}">
   <td>{{ m.severity_badge(f.severity) }}</td>
-  <td><a class="check" href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a></td>
+  <td>{% if f.id %}<a class="check" href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a>{% else %}<span class="check" title="writer-authored rule finding">{{ f.check_name }}</span>{% endif %}</td>
   <td class="expl">{{ f.explanation }}</td>
   <td class="cite-cell">
     {% if f.scene_id %}{{ m.cite(f.scene_id, f.scene_slug, f.story_position, f.episode_title) }}{% else %}<span class="muted">—</span>{% endif %}
