@@ -24,9 +24,12 @@ Corollary: every flag, answer, or finding **must cite its source** (episode/scen
 - `docs/architecture.md` — assertion model, the two clocks, pipeline stages, layers.
 - `docs/extraction.md` — extraction pipeline spec: JSON schema, prompts, entity resolution, confidence/confirm queue.
 - `docs/decisions.md` — ADR log. Read before proposing architecture changes.
+- `docs/workstreams.md` — workstream split + merge order. Read before opening a branch; never run two branches with in-flight DB migrations.
+- `docs/readers-report.md` — Reader's Report product spec (note families, grounding law, funnel, launch tiers).
 - `db/schema.sql` — DDL: tables, ranges, exclusion constraints, indexes.
 - `db/checks.sql` — MVP continuity checks as SQL, with severity and explanation.
 - `fixtures/greyharbor/` — original 2-episode test show with **planted continuity errors** + `answer-key.md`. This is the grading harness for Phase 0.
+- `corpus/` — owned-copy scripts for **internal smoke testing only** (gitignored except README.md; files exist only on the operator's machine — see `corpus/README.md` for canonical paths, rights, and allowed uses). Never eval-graded, never demo material, never committed.
 
 ## Working conventions
 
