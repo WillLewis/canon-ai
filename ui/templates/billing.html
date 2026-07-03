@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{# Pricing page (P3-BILLING). Tier copy comes from billing/routes.py, which
+   mirrors docs/readers-report.md "Unit economics" — edit it there, not here.
+   Stripe hosts checkout and the portal; no card fields ever render here. #}
+{% block title %}Canon · Plans{% endblock %}
+{% block bodyclass %}billing{% endblock %}
+{% block foottag %}Billing runs on Stripe — Canon never sees your card.{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Plans</h1>
+  <p class="sub">The first script is free — full Reader's Report, nothing crippled.
+    Paid unlocks the corpus features: everything that reads across scripts.</p>
+  {% if checkout_state == 'success' %}
+  <p class="billing-flash ok">Payment received — your plan updates the moment Stripe confirms it (usually seconds).</p>
+  {% elif checkout_state == 'canceled' %}
+  <p class="billing-flash">Checkout canceled — no charge was made.</p>
+  {% endif %}
+  {% if user %}
+  <p class="muted small">Signed in as {{ user.email or user.id }} · current plan:
+    <strong class="tier-badge tier-{{ tier }}">{{ tier }}</strong></p>
+  {% else %}
+  <p class="muted small">Sign in to see your current plan or upgrade.</p>
+  {% endif %}
+</div>
+
+<section class="pricing-grid">
+
+  <div class="plan-card{% if tier == 'free' %} current{% endif %}">
+    <h2>Free</h2>
+    <p class="price">$0 <span class="per">forever</span></p>
+    <ul class="plan-features">
+      {% for f in free_features %}<li>{{ f }}</li>{% endfor %}
+    </ul>
+    {% if tier == 'free' %}<span class="current-pill">Your plan</span>{% endif %}
+  </div>
+
+  <div class="plan-card plan-paid{% if tier == 'paid' %} current{% endif %}">
+    <h2>Paid</h2>
+    <p class="price">{{ paid_price }} <span class="per">/ month</span></p>
+    <ul class="plan-features">
+      {% for f in paid_features %}<li>{{ f }}</li>{% endfor %}
+    </ul>
+    {% if tier == 'paid' %}
+    <span class="current-pill">Your plan</span>
+    <a class="btn-note portal-link" href="/billing/portal">Manage billing</a>
+    {% elif user %}
+    <form method="post" action="/billing/checkout" class="upgrade-form">
+      <button type="submit" class="btn-note btn-upgrade"
+        {% if not stripe_ready %}disabled title="billing is not configured on this server"{% endif %}>
+        Upgrade</button>
+    </form>
+    <p class="muted small">Checkout and cancellation are handled by Stripe.</p>
+    {% else %}
+    <p class="muted">Sign in first, then upgrade from here.</p>
+    {% endif %}
+  </div>
+
+</section>
+
+<style>
+  /* Scoped to this page; shared chrome stays in static/style.css. */
+  .billing-flash { padding: .5rem .75rem; border-radius: 6px; background: #f6f3ee; }
+  .billing-flash.ok { background: #eaf5ec; }
+  .tier-badge { text-transform: uppercase; letter-spacing: .04em; }
+  .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 340px)); gap: 1.25rem; margin-top: 1rem; }
+  .plan-card { border: 1px solid #ddd6cb; border-radius: 10px; padding: 1.25rem 1.5rem; position: relative; }
+  .plan-card.plan-paid { border-color: #b9a97f; }
+  .plan-card.current { box-shadow: 0 0 0 2px #b9a97f inset; }
+  .plan-card h2 { margin: 0 0 .25rem; }
+  .price { font-size: 1.6rem; font-weight: 700; margin: 0 0 .75rem; }
+  .price .per { font-size: .85rem; font-weight: 400; opacity: .7; }
+  .plan-features { margin: 0 0 1rem; padding-left: 1.1rem; }
+  .plan-features li { margin: .3rem 0; }
+  .current-pill { display: inline-block; font-size: .75rem; padding: .15rem .6rem; border-radius: 999px; background: #b9a97f; color: #fff; margin-bottom: .5rem; }
+  .btn-upgrade { font-size: 1rem; }
+  .upgrade-form { margin: 0 0 .5rem; }
+</style>
+
+{% endblock %}
