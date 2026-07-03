@@ -466,6 +466,95 @@ def list_findings(world_id: int) -> list[dict]:
         """, {"w": world_id})
 
 
+# --- writer-authored rules composed into the findings views (P3-WIRING) -----
+
+_RULE_FINDING_DEFAULTS = {
+    "id": None, "scene_slug": None, "story_position": None,
+    "episode_title": None, "subject_a": None, "subject_b": None,
+    "sealed": False, "assertion_a": None, "assertion_b": None, "scene_id": None,
+}
+
+
+def rules_conn():
+    """Tuple-row connection for canon.rules composition (module-level seam so
+    tests can fake it). None when no database is reachable — the findings
+    views then render the plain checker rows unchanged."""
+    try:
+        return connect(db_url())
+    except Exception:
+        return None
+
+
+def _is_undefined_table(exc: Exception) -> bool:
+    """True for Postgres 42P01 (undefined_table) from psycopg 2 or 3."""
+    code = getattr(exc, "sqlstate", None) or getattr(exc, "pgcode", None)
+    return code == "42P01"
+
+
+def _normalized_finding(f: dict) -> dict:
+    """Rule findings arrive keyed 'check' (canon/check.py shape); give them the
+    ui/db.list_findings column names so every template renders them alike."""
+    if "check_name" in f:
+        return f
+    out = _RULE_FINDING_DEFAULTS | dict(f)
+    out["check_name"] = out.pop("check", None)
+    return out
+
+
+def list_findings_composed(world_id: int) -> list[dict]:
+    """Findings for the report/findings/script views with the world's
+    writer-authored rules composed in (canon.rules.compose_findings): enabled
+    CANNOT/ONLY rules contribute findings, EXCEPTION rules filter them.
+
+    Feature-detected: the world_rules table lands with Wave 5's schema sync,
+    so on an undefined-table error — or with no database reachable at all —
+    the plain findings return unchanged, silently. Any other composition
+    failure also falls back to plain findings (a broken rules pass must never
+    take the report down), but is logged.
+    """
+    rows = list_findings(world_id)
+    conn = rules_conn()
+    if conn is None:
+        return rows
+    try:
+        from canon import rules as rules_engine  # no LLM in there (grep-guarded)
+
+        composed = rules_engine.compose_findings(conn.cursor(), world_id, rows)
+    except Exception as exc:
+        if not _is_undefined_table(exc):
+            import logging
+
+            logging.getLogger("canon.ui").warning(
+                "rule composition failed; rendering plain findings: %r", exc)
+        return rows
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return [_normalized_finding(f) for f in composed]
+
+
+# --- ops / billing cursor (P3-WIRING): the rate-limit guard's store ----------
+
+_OPS_CONN = None
+
+
+def ops_cursor():
+    """A plain cursor over the ops/billing tables (usage_events,
+    billing_subscriptions) for ops.middleware.rate_limited and
+    billing.store.make_tier_resolver. One lazily-opened autocommit connection,
+    reused across requests: the guard only reads, and record_action's insert
+    must commit immediately. Failure handling belongs to the callers — the
+    middleware fails open, billing resolves to 'free' — so this raises freely."""
+    global _OPS_CONN
+    if _OPS_CONN is None or getattr(_OPS_CONN, "closed", False):
+        conn = connect(db_url())
+        conn.autocommit = True
+        _OPS_CONN = conn
+    return _OPS_CONN.cursor()
+
+
 def _finding_assertion(conn, world_id: int, assertion_id: int | None) -> dict | None:
     if assertion_id is None:
         return None
