@@ -16,7 +16,8 @@ This module issues SELECTs only, except `seal_finding` / `unseal_finding`, which
 write the `seals` table exactly as the checker reads it (the same
 `(check_name, assertion_a, coalesce(assertion_b,0))` key used in canon/check.py)
 and mirror the result onto `findings.sealed` so a re-check is not required to see
-the change.
+the change — and `set_note_status`, the note surface's one write: the permanent
+open -> sealed/dismissed transition on `coverage_notes`, with attribution.
 """
 
 from __future__ import annotations
@@ -94,6 +95,11 @@ def list_worlds() -> list[dict]:
 def get_world(name: str) -> dict | None:
     with db_conn() as conn:
         return _one(conn, "select id, name from worlds where name = %(n)s", {"n": name})
+
+
+def get_world_by_id(world_id: int) -> dict | None:
+    with db_conn() as conn:
+        return _one(conn, "select id, name from worlds where id = %(id)s", {"id": world_id})
 
 
 def member_role(world_id: int, user_id: str) -> str | None:
@@ -453,6 +459,128 @@ def seal_finding(world_id: int, finding_id: int, reason: str,
         """, key)
         conn.commit()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Note surface (P3-SURFACE): coverage notes, load-bearing canon, script text,
+# and the ask pane. Reads everywhere; the only writes are the two permanent
+# status transitions on coverage_notes (open -> sealed | dismissed).
+# ---------------------------------------------------------------------------
+
+NOTE_TERMINAL_STATUSES = ("sealed", "dismissed")
+
+
+def list_coverage_notes(world_id: int) -> list[dict]:
+    """Every coverage note for the world, newest-run data included.
+
+    Rows carry the whole lifecycle (status, first/last_seen_run, resolved_at,
+    status_changed_by/at) so the report, footer, and draft-2 diff all render
+    from one query. `evidence` is jsonb and arrives as a dict.
+    """
+    with db_conn() as conn:
+        return _all(conn, """
+            select id::text as id, note_key, family, summary, body, evidence,
+                   salience, status,
+                   first_seen_run::text as first_seen_run,
+                   last_seen_run::text  as last_seen_run,
+                   resolved_at,
+                   status_changed_by::text as status_changed_by,
+                   status_changed_at,
+                   created_at, updated_at
+            from coverage_notes
+            where world_id = %(w)s
+            order by family, salience desc, note_key
+        """, {"w": world_id})
+
+
+def set_note_status(world_id: int, note_id: str, status: str,
+                    changed_by: str | None = None) -> bool:
+    """Seal or dismiss a coverage note — permanently.
+
+    The WHERE clause enforces the product law from docs/readers-report.md: only
+    an *open* note can transition, and nothing here (or anywhere in ui/) can
+    re-open a sealed/dismissed note. Attribution goes to the identity columns
+    added by the identity_and_access migration.
+    """
+    if status not in NOTE_TERMINAL_STATUSES:
+        raise ValueError(f"status must be one of {NOTE_TERMINAL_STATUSES}, got {status!r}")
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            update coverage_notes
+               set status = %(s)s,
+                   status_changed_by = %(u)s::uuid,
+                   status_changed_at = now(),
+                   updated_at = now()
+             where id = %(id)s::uuid and world_id = %(w)s and status = 'open'
+             returning id
+        """, {"s": status, "u": changed_by, "id": note_id, "w": world_id})
+        changed = cur.fetchone() is not None
+        conn.commit()
+    return changed
+
+
+def load_bearing(world_id: int, limit: int = 6) -> list[dict]:
+    """Section 2 of the report: the most-connected entities, fully deterministic
+    (assertion counts and distinct cited scenes; no opinion anywhere)."""
+    with db_conn() as conn:
+        return _all(conn, """
+            select e.id, e.name, e.kind,
+                   count(*) as n_assertions,
+                   count(distinct t.scene_id) as n_scenes
+            from (
+              select subject_id as entity_id, established_in_scene as scene_id
+                from assertions where world_id = %(w)s
+              union all
+              select object_id, established_in_scene
+                from assertions where world_id = %(w)s and object_id is not null
+            ) t
+            join entities e on e.id = t.entity_id
+            group by e.id, e.name, e.kind
+            order by n_assertions desc, e.name
+            limit %(limit)s
+        """, {"w": world_id, "limit": limit})
+
+
+def list_scenes_with_text(world_id: int) -> list[dict]:
+    """Scene records with raw text, in story order — the script view's spine."""
+    with db_conn() as conn:
+        return _all(conn, """
+            select s.id, s.slug, s.story_position, s.is_flashback, s.raw_text,
+                   wk.id work_id, wk.title episode_title, wk.sort_order
+            from scenes s join works wk on wk.id = s.work_id
+            where wk.world_id = %(w)s
+            order by s.story_position, s.id
+        """, {"w": world_id})
+
+
+def entity_names(world_id: int, entity_ids: list[int]) -> dict[int, str]:
+    """id -> name for the given entities (used to scope a note's Ask seed)."""
+    ids = sorted({int(i) for i in entity_ids or [] if i})
+    if not ids:
+        return {}
+    with db_conn() as conn:
+        rows = _all(conn, """
+            select id, name from entities
+            where world_id = %(w)s and id = any(%(ids)s)
+        """, {"w": world_id, "ids": ids})
+    return {r["id"]: r["name"] for r in rows}
+
+
+def ask_question(world_id: int, question: str):
+    """Run the ask-the-bible engine (ask/engine.py) against this world.
+
+    The engine indexes result rows positionally, so it gets a plain tuple-row
+    connection (not the dict_row one the templates use). Import stays local so
+    `ui` never grows a hard module-level dependency on the ask package.
+    """
+    from ask import engine as ask_engine  # read-only import; never edited here
+
+    conn = connect(db_url())
+    try:
+        return ask_engine.ask_question(conn, world_id, question)
+    finally:
+        conn.close()
 
 
 def unseal_finding(world_id: int, finding_id: int) -> bool:

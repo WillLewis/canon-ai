@@ -100,10 +100,20 @@ def get_current_user(request: Request) -> User:
 
 
 def _resolve_world_id(request: Request) -> int | None:
-    """The world this request addresses — same picking rule as ui.app._pick_world
-    (?world= by name, else the loaded dev world, else the first), duplicated here
-    because dependencies resolve before the route body runs."""
+    """The world this request addresses.
+
+    Routes under /worlds/{world_id}/... carry the id in the path — that wins.
+    Otherwise the picking rule matches ui.app._pick_world (?world= by name,
+    else the loaded dev world, else the first), duplicated here because
+    dependencies resolve before the route body runs."""
     worlds = db.list_worlds()
+    path_id = request.path_params.get("world_id")
+    if path_id is not None:
+        try:
+            wid = int(path_id)
+        except (TypeError, ValueError):
+            return None
+        return wid if any(w["id"] == wid for w in worlds) else None
     by_name = {w["name"]: w for w in worlds}
     name = request.query_params.get("world")
     if name and name in by_name:
@@ -111,6 +121,32 @@ def _resolve_world_id(request: Request) -> int | None:
     if "greyharbor_s1" in by_name:
         return by_name["greyharbor_s1"]["id"]
     return worlds[0]["id"] if worlds else None
+
+
+def peek_user(request: Request, world_id: int | None = None) -> User | None:
+    """Best-effort identity for read-only views — never raises, never blocks.
+
+    Read views stay open (the workbench pattern); this only decides whether
+    action buttons render enabled. With AUTH_DISABLED=1 it returns the dev
+    owner; with a valid token it returns the user with their role on the world;
+    with no/invalid token it returns None (viewer-grade, buttons disabled).
+    """
+    if auth_disabled():
+        return replace(DEV_USER)
+    token = _token_from_request(request)
+    if not token:
+        return None
+    try:
+        claims = decode_token(token)
+    except HTTPException:
+        return None
+    sub = claims.get("sub")
+    if not sub:
+        return None
+    user = User(id=str(sub), email=claims.get("email"))
+    if world_id is not None:
+        user.role = db.member_role(world_id, user.id)
+    return user
 
 
 def require_role(min_role: str):
