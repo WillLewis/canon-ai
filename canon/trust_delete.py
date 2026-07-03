@@ -86,6 +86,11 @@ OPTIONAL_WORLD_DELETES: list[tuple[str, str]] = [
     ("world_rules", "DELETE FROM world_rules WHERE world_id = %(w)s"),  # P3-RULES
     # P3-ENGINE: per-world check-family toggles
     ("world_family_config", "DELETE FROM world_family_config WHERE world_id = %(w)s"),
+    # P3-FRONTDOOR: ingest-theater runs — events first (FK to runs), then runs.
+    ("pipeline_run_events",
+     "DELETE FROM pipeline_run_events WHERE run_id IN "
+     "(SELECT id FROM pipeline_runs WHERE world_id = %(w)s)"),
+    ("pipeline_runs", "DELETE FROM pipeline_runs WHERE world_id = %(w)s"),
 ]
 
 

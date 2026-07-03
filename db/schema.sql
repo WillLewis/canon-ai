@@ -290,6 +290,39 @@ create table world_rules (
 );
 create index world_rules_world on world_rules (world_id, kind);
 
+-- ---------- pipeline runs (P3-FRONTDOOR) ----------
+-- One row per background ingest ("ingest theater"): live phase / progress
+-- counters plus the resume state (cumulative candidate extractions as jsonb)
+-- when a run fails partway. Server-only writes; clients poll read-only.
+create table pipeline_runs (
+  id           uuid primary key default gen_random_uuid(),
+  world_id     bigint not null references worlds(id) on delete cascade,
+  user_id      uuid,                    -- who started it; no FK (survives user deletion)
+  status       text not null default 'running'
+               check (status in ('running','done','failed','aborted')),
+  phase        text not null default 'reading'
+               check (phase in ('reading','extracting','resolving','checking','reporting','done')),
+  scenes_total int default 0,
+  scenes_done  int default 0,
+  facts_total  int default 0,
+  cost_usd     numeric(10,4) default 0,
+  error        text,                    -- last failure message (resumable runs)
+  candidates   jsonb,                   -- cumulative scene extractions = the resume state
+  created_at   timestamptz default now(),
+  heartbeat_at timestamptz default now()  -- runner liveness; stale (>90s) running = failed
+);
+create index pipeline_runs_world_time on pipeline_runs (world_id, created_at desc);
+
+-- Append-only narration ledger the theater page replays from seq 0 on reload.
+create table pipeline_run_events (
+  run_id     uuid references pipeline_runs(id) on delete cascade,
+  seq        int,
+  kind       text not null,             -- scene | entity | finding | phase | stat | error | cost_abort | done
+  data       jsonb not null default '{}',
+  created_at timestamptz default now(),
+  primary key (run_id, seq)
+);
+
 -- ---------- RLS summary (Supabase only — full DDL in the migrations) ----------
 -- 20260703060000_identity_and_access.sql enables RLS on every table above it
 -- (fail closed) and defines canon_role_rank/canon_world_role/canon_has_role +
@@ -309,3 +342,7 @@ create index world_rules_world on world_rules (world_id, kind);
 -- world_family_config (20260703090000) is NOT RLS-enabled in the chain: it was
 -- created after the identity migration's blanket enable and is written only by
 -- the service role / direct-URL pipeline.
+-- 20260703110000_pipeline_runs.sql adds:
+--   * pipeline_runs / pipeline_run_events: RLS enabled, member select ONLY
+--     (canon_has_role via world_id / canon_run_world) — no write policies on
+--     purpose; the runner writes via the service role / direct URL.

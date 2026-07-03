@@ -761,6 +761,144 @@ def ask_question(world_id: int, question: str):
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Pipeline runs (P3-FRONTDOOR): the background-ingest run rows and their
+# narration event ledger. Server-only writes (the runner thread in ui/jobs.py);
+# reads are feature-detected like list_findings_composed — on a database that
+# has not run the pipeline_runs migration they return None/[] instead of 500ing
+# the theater page.
+# ---------------------------------------------------------------------------
+
+import json as _json  # noqa: E402  (stdlib; jsonb params for the run tables)
+
+# update_run accepts exactly these columns — everything else is a programming
+# error, not a query parameter (heartbeat_at is always stamped server-side).
+RUN_FIELDS = ("status", "phase", "scenes_total", "scenes_done", "facts_total",
+              "cost_usd", "error", "candidates")
+
+_RUN_SELECT = """
+    select id::text as id, world_id, user_id::text as user_id, status, phase,
+           scenes_total, scenes_done, facts_total, cost_usd, error, candidates,
+           created_at, heartbeat_at
+    from pipeline_runs
+"""
+
+
+def create_run(world_id: int, user_id: str | None, scenes_total: int = 0) -> str:
+    """Insert one running pipeline_runs row; returns its uuid as text."""
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            insert into pipeline_runs (world_id, user_id, scenes_total)
+            values (%(w)s, %(u)s::uuid, %(n)s)
+            returning id::text as id
+        """, {"w": world_id, "u": user_id, "n": scenes_total})
+        run_id = cur.fetchone()["id"]
+        conn.commit()
+    return run_id
+
+
+def append_run_event(run_id: str, kind: str, data: dict) -> int:
+    """Append one ledger event; seq is allocated per run (single writer thread
+    per run, so max(seq)+1 is race-free in practice). Returns the seq."""
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            insert into pipeline_run_events (run_id, seq, kind, data)
+            select %(r)s::uuid, coalesce(max(seq), 0) + 1, %(k)s, %(d)s::jsonb
+            from pipeline_run_events where run_id = %(r)s::uuid
+            returning seq
+        """, {"r": run_id, "k": kind, "d": _json.dumps(data or {}, default=str)})
+        seq = cur.fetchone()["seq"]
+        conn.commit()
+    return seq
+
+
+def list_run_events(run_id: str, after: int = 0) -> list[dict]:
+    """Ledger events with seq > after, in order — the theater's poll body."""
+    try:
+        with db_conn() as conn:
+            return _all(conn, """
+                select seq, kind, data, created_at
+                from pipeline_run_events
+                where run_id = %(r)s::uuid and seq > %(a)s
+                order by seq
+            """, {"r": run_id, "a": after})
+    except Exception as exc:
+        if _is_undefined_table(exc):
+            return []
+        raise
+
+
+def get_run(run_id: str) -> dict | None:
+    try:
+        with db_conn() as conn:
+            return _one(conn, _RUN_SELECT + " where id = %(r)s::uuid", {"r": run_id})
+    except Exception as exc:
+        if _is_undefined_table(exc):
+            return None
+        raise
+
+
+def latest_run_for_world(world_id: int) -> dict | None:
+    """The newest run for a world — reloading the theater page resumes
+    watching this one."""
+    try:
+        with db_conn() as conn:
+            return _one(conn, _RUN_SELECT + """
+                where world_id = %(w)s
+                order by created_at desc, id desc
+                limit 1
+            """, {"w": world_id})
+    except Exception as exc:
+        if _is_undefined_table(exc):
+            return None
+        raise
+
+
+def update_run(run_id: str, **fields) -> bool:
+    """Update whitelisted run columns; heartbeat_at is stamped on every call
+    (an empty fields dict is a pure heartbeat)."""
+    unknown = set(fields) - set(RUN_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown pipeline_runs fields: {sorted(unknown)}")
+    sets = ["heartbeat_at = now()"]
+    params: dict = {"r": run_id}
+    for key, value in fields.items():
+        if key == "candidates":
+            sets.append("candidates = %(candidates)s::jsonb")
+            params["candidates"] = None if value is None else _json.dumps(value, default=str)
+        else:
+            sets.append(f"{key} = %({key})s")
+            params[key] = value
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"update pipeline_runs set {', '.join(sets)} "
+            "where id = %(r)s::uuid returning id",
+            params)
+        changed = cur.fetchone() is not None
+        conn.commit()
+    return changed
+
+
+def works_with_scenes(world_id: int) -> list[dict]:
+    """Works + ordered scene rows for one world — resume reconstructs
+    duck-typed ParsedWork objects from these (ui/jobs.py rebuild_works)."""
+    with db_conn() as conn:
+        works = _all(conn, """
+            select id, title, source_file, sort_order from works
+            where world_id = %(w)s order by sort_order, id
+        """, {"w": world_id})
+        for wk in works:
+            wk["scenes"] = _all(conn, """
+                select slug, story_position, is_flashback, raw_text
+                from scenes where work_id = %(k)s
+                order by story_position, id
+            """, {"k": wk["id"]})
+    return works
+
+
 def unseal_finding(world_id: int, finding_id: int) -> bool:
     with db_conn() as conn:
         cur = conn.cursor()

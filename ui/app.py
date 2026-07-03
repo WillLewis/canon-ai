@@ -37,11 +37,13 @@ templates = Jinja2Templates(directory=str(_HERE / "templates"))
 # Wave 4 routers (billing, rule builder, trust) — self-contained modules wired
 # here so parallel workstreams never had to edit this file (docs/workstreams.md).
 from billing.routes import router as _billing_router  # noqa: E402
+from . import jobs as _jobs  # noqa: E402
 from . import rules_ui as _rules_ui  # noqa: E402
 from . import share_ui as _share_ui  # noqa: E402
 from . import trust_ui as _trust_ui  # noqa: E402
 
 app.include_router(_billing_router)
+app.include_router(_jobs.router)
 app.include_router(_rules_ui.router)
 app.include_router(_share_ui.router)
 app.include_router(_trust_ui.router)
@@ -158,6 +160,11 @@ async def _on_error(request: Request, exc: Exception):
 
 @app.get("/", response_class=HTMLResponse)
 def overview(request: Request, world: str | None = None):
+    # P3-FRONTDOOR: anonymous visitors get the landing poster; signed-in users
+    # (and the AUTH_DISABLED dev owner) keep the workbench overview unchanged.
+    if auth.peek_user(request) is None:
+        return templates.TemplateResponse(request, "landing.html",
+                                          {"demo_url": "/demo/report"})
     worlds = db.list_worlds()
     active = _pick_world(world, worlds)
     if not active:

@@ -1,0 +1,63 @@
+/* P3-FRONTDOOR page-scoped styles (upload + theater). All colors/faces come
+   from the DESIGN.md tokens with literal fallbacks; classes are fd-prefixed so
+   nothing here collides with the shared style.css (P3-POLISH owns that).
+   Red = caught-only; buttons are ink; nothing bounces. */
+
+.fd-page { max-width: 760px; margin: 0 auto; }
+.fd-title { font-family: var(--display, Fraunces, Georgia, serif);
+  font-weight: 600; font-size: 28px; letter-spacing: -.01em; }
+.fd-lede { color: var(--graphite, #6F675A); max-width: 56ch; }
+.fd-mono, .fd-count, .fd-kicker, .fd-ledger, .fd-phase, .fd-first-ev, .fd-trust {
+  font-family: var(--evidence, 'Courier Prime', 'Courier New', monospace); }
+.fd-kicker { font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--graphite, #6F675A); }
+
+/* upload */
+.fd-drop { margin-top: 24px; border: 1px dashed var(--graphite, #6F675A);
+  background: var(--page, #FBFAF4); padding: 48px 24px; text-align: center; }
+.fd-drop.fd-over { border-color: var(--ink, #181510); border-style: solid; }
+.fd-drop-line { font-size: 17px; margin: 0; }
+.fd-browse { text-decoration: underline; cursor: pointer; }
+.fd-drop-meta { font-family: var(--evidence, 'Courier Prime', monospace);
+  font-size: 12px; color: var(--graphite, #6F675A); margin: 10px 0 0; }
+.fd-status { min-height: 1.4em; margin-top: 14px; }
+.fd-bad { color: var(--critical, #A81F11); }
+.fd-trust { font-size: 12px; color: var(--graphite, #6F675A); margin-top: 18px; }
+.fd-limits { margin-top: 22px; border-top: 1px solid var(--hairline, #DDD7C9);
+  padding-top: 14px; font-size: 14px; }
+.fd-limits ul { margin: 8px 0 0; padding-left: 18px; }
+
+/* theater */
+.fd-theater-head { display: flex; justify-content: space-between;
+  align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.fd-counterline { text-align: right; }
+.fd-count { display: block; font-size: 28px; font-weight: 700; }
+.fd-phase { font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--graphite, #6F675A); }
+.fd-ledger { list-style: none; margin: 18px 0 0; padding: 16px 18px;
+  background: var(--page, #FBFAF4); border: 1px solid var(--hairline, #DDD7C9);
+  font-size: 13px; line-height: 1.7; max-height: 46vh; overflow-y: auto; }
+.fd-ledger li { white-space: pre-wrap; }
+.fd-dim { color: var(--graphite, #6F675A); }
+.fd-flag { color: var(--accent, #C43B22); }
+
+/* the first-finding card — the only red treatment on the page */
+.fd-first { margin-top: 20px; background: var(--page, #FBFAF4);
+  border: 1px solid var(--accent, #C43B22); border-left-width: 3px;
+  padding: 16px 18px; }
+.fd-sev { font-family: var(--evidence, 'Courier Prime', monospace);
+  font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  padding: 2px 8px; border: 1.5px solid var(--accent, #C43B22);
+  color: var(--accent, #C43B22); }
+.fd-sev-critical { color: var(--critical, #A81F11); border-color: var(--critical, #A81F11); font-weight: 700; }
+.fd-sev-warning { color: var(--warning, #B06E10); border-color: var(--warning, #B06E10); }
+.fd-sev-note { color: var(--note, #41708F); border-color: var(--note, #41708F); border-style: dashed; }
+.fd-first-summary { font-weight: 600; font-size: 15px; margin: 10px 0 6px; }
+.fd-first-ev { font-size: 13px; margin: 0 0 8px; }
+.fd-first-links a { color: var(--ink, #181510); }
+
+.fd-done { margin-top: 18px; font-size: 16px; font-weight: 600; }
+.fd-btn { font-family: var(--body, 'Instrument Sans', sans-serif); font-size: 13px;
+  font-weight: 600; padding: 7px 14px; border: 1px solid var(--ink, #181510);
+  background: transparent; color: var(--ink, #181510); border-radius: 0; cursor: pointer; }
+.fd-btn:hover { background: var(--ink, #181510); color: var(--page, #FBFAF4); }
