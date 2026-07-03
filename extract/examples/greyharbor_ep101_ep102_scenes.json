@@ -1,0 +1,104 @@
+{
+  "world": "greyharbor",
+  "scenes": [
+    {
+      "scene_id": "E101/sc1",
+      "work_title": "E101 - The Ledger",
+      "scene_index": 1,
+      "slug": "INT. HARBORMASTER'S OFFICE - DAY",
+      "story_position": 1,
+      "is_flashback": false,
+      "raw_text": "INT. HARBORMASTER'S OFFICE - DAY\n\nMARA VOSS, 30s, salt-bitten and unsentimental, slaps a tide chart on the desk. Her uncle TOBIAS VOSS, 60s, doesn't look up from his ledger.\n\nMARA\nThree boats out past the shoals last night. None of them fishing.\n\nTOBIAS\nYou count boats now?\n\nMARA\nI count everything. You taught me that.\n\nTOBIAS\nI taught you to drive a truck, too, and look how that ended.\n\nMARA\nOne fence. I haven't touched a wheel since and you know I can't. License is gone for good.\n\nTobias finally looks up. Closes the ledger.\n\nTOBIAS\nLeave it alone, Mara."
+    },
+    {
+      "scene_id": "E101/sc2",
+      "work_title": "E101 - The Ledger",
+      "scene_index": 2,
+      "slug": "EXT. GREYHARBOR DOCKS - NIGHT",
+      "story_position": 2,
+      "is_flashback": false,
+      "raw_text": "EXT. GREYHARBOR DOCKS - NIGHT\n\nMara walks the planks. EDDA QUINN, 50s, harbor cook, smoking by the gutting tables.\n\nEDDA\nYour uncle keeps two sets of numbers. The real one's not in that office.\n\nMARA\nYou've seen it?\n\nEDDA\nI've seen where he goes Thursday nights. The old chapel on the point."
+    },
+    {
+      "scene_id": "E101/sc3",
+      "work_title": "E101 - The Ledger",
+      "scene_index": 3,
+      "slug": "INT. CHAPEL ON THE POINT - NIGHT",
+      "story_position": 3,
+      "is_flashback": false,
+      "raw_text": "INT. CHAPEL ON THE POINT - NIGHT\n\nCandle stubs. Tobias kneels at a loose floor stone, slides a LEATHER LEDGER beneath it.\n\nTOBIAS\n(to himself)\nForgive me the arithmetic."
+    },
+    {
+      "scene_id": "E101/sc4",
+      "work_title": "E101 - The Ledger",
+      "scene_index": 4,
+      "slug": "EXT. GREYHARBOR DOCKS - NIGHT",
+      "story_position": 4,
+      "is_flashback": false,
+      "raw_text": "EXT. GREYHARBOR DOCKS - NIGHT\n\nMara finds her brother's skiff, the DANNY-LEE, tied off and empty. A coast guard NOTICE stapled to the mast: MISSING.\n\nMARA\n(quiet)\nI'll find you, Danny. Whatever it takes."
+    },
+    {
+      "scene_id": "E101/sc5",
+      "work_title": "E101 - The Ledger",
+      "scene_index": 5,
+      "slug": "INT. HARBORMASTER'S OFFICE - NIGHT",
+      "story_position": 5,
+      "is_flashback": false,
+      "raw_text": "INT. HARBORMASTER'S OFFICE - NIGHT\n\nTobias at his desk. The door opens behind him. We don't see who enters.\n\nTOBIAS\nYou. I told them I needed more time --\n\nA gunshot. Tobias slumps over the ledger of fake numbers. Dead."
+    },
+    {
+      "scene_id": "E101/sc6",
+      "work_title": "E101 - The Ledger",
+      "scene_index": 6,
+      "slug": "EXT. CHAPEL ON THE POINT - NIGHT",
+      "story_position": 6,
+      "is_flashback": false,
+      "raw_text": "EXT. CHAPEL ON THE POINT - NIGHT\n\nFlames climb the steeple. The chapel burns to its stones. No one comes to put it out.\n\nFADE OUT."
+    },
+    {
+      "scene_id": "E102/sc1",
+      "work_title": "E102 - Thursday Numbers",
+      "scene_index": 1,
+      "slug": "EXT. GREYHARBOR DOCKS - DAY",
+      "story_position": 7,
+      "is_flashback": false,
+      "raw_text": "EXT. GREYHARBOR DOCKS - DAY\n\nPolice tape on the harbormaster's door. Mara stares at it. DEPUTY COLE BRANNIGAN, 40s, approaches, hat in hand.\n\nCOLE\nWe're saying robbery. Till was open.\n\nMARA\nThe till's always open. Nobody steals from a man who knows every hull in the harbor.\n\nCOLE\nWhoever it was, they didn't find the real ledger. It's still under the chapel floor stone where your uncle hid it.\n\nMARA\nHow would you know where he hid anything?\n\nCole stiffens. Tips his hat. Walks off."
+    },
+    {
+      "scene_id": "E102/sc2",
+      "work_title": "E102 - Thursday Numbers",
+      "scene_index": 2,
+      "slug": "INT. CHAPEL ON THE POINT - DAY",
+      "story_position": 8,
+      "is_flashback": false,
+      "raw_text": "INT. CHAPEL ON THE POINT - DAY\n\nMara pries up the loose floor stone. The LEATHER LEDGER, intact. She flips pages: names, weights, payments.\n\nMARA\nForgive me the arithmetic."
+    },
+    {
+      "scene_id": "E102/sc3",
+      "work_title": "E102 - Thursday Numbers",
+      "scene_index": 3,
+      "slug": "INT. HARBORMASTER'S OFFICE - DAY",
+      "story_position": 9,
+      "is_flashback": false,
+      "raw_text": "INT. HARBORMASTER'S OFFICE - DAY\n\nMara spreads the ledger pages on the desk. TOBIAS stands at the window, watching the boats.\n\nTOBIAS\nNow you've counted everything. Happy?\n\nMARA\nWho were you protecting?\n\nTOBIAS\nWrong question. Ask who was protecting me."
+    },
+    {
+      "scene_id": "E102/sc4",
+      "work_title": "E102 - Thursday Numbers",
+      "scene_index": 4,
+      "slug": "EXT. COAST ROAD - DUSK",
+      "story_position": 10,
+      "is_flashback": false,
+      "raw_text": "EXT. COAST ROAD - DUSK\n\nMara behind the wheel of Tobias's pickup, driving hard along the cliff road, ledger on the passenger seat."
+    },
+    {
+      "scene_id": "E102/sc5",
+      "work_title": "E102 - Thursday Numbers",
+      "scene_index": 5,
+      "slug": "EXT. EDDA'S SHACK - NIGHT",
+      "story_position": 11,
+      "is_flashback": false,
+      "raw_text": "EXT. EDDA'S SHACK - NIGHT\n\nEdda opens the door before Mara knocks.\n\nEDDA\nYou found the Thursday numbers.\n\nMARA\nCole knew where they were. Before I did.\n\nEDDA\nThen the deputy's name is in that book. Look under the weights nobody could land alone.\n\nMara opens the ledger under the porch light.\n\nMARA\n(reading)\n\"C.B. -- four hundred, the shoals run.\"\n\nShe looks up. Somewhere out on the water, an engine starts.\n\nFADE OUT."
+    }
+  ]
+}

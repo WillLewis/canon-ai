@@ -1,0 +1,14 @@
+{
+  "entities": [
+    {
+      "name": "Marcus Hale",
+      "kind": "character",
+      "dossier": "Marcus Hale is the husband referred to in the scene.",
+      "aliases": [
+        {"alias": "MARCUS", "kind": "name_variant"},
+        {"alias": "Marcus", "kind": "name_variant"},
+        {"alias": "her husband", "kind": "role_reference"}
+      ]
+    }
+  ]
+}

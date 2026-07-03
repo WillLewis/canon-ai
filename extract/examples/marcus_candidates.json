@@ -1,0 +1,58 @@
+{
+  "world": "alias-test",
+  "scenes": [
+    {
+      "scene_id": "TST/sc1",
+      "work_title": "TST - Alias Test",
+      "scene_index": 1,
+      "slug": "INT. KITCHEN - NIGHT",
+      "story_position": 1,
+      "is_flashback": false,
+      "assertions": [
+        {
+          "subject": "MARCUS",
+          "predicate": "occupation",
+          "object_entity": null,
+          "object_value": "doctor",
+          "object_fact_ref": null,
+          "polarity": true,
+          "starts_here": true,
+          "ends_here": false,
+          "supporting_quote": "MARCUS, still in his hospital badge, enters.",
+          "confidence": 0.94,
+          "notes": null
+        },
+        {
+          "subject": "Marcus Hale",
+          "predicate": "possesses",
+          "object_entity": "watch",
+          "object_value": null,
+          "object_fact_ref": null,
+          "polarity": true,
+          "starts_here": true,
+          "ends_here": false,
+          "supporting_quote": "Marcus Hale sets the watch on the counter.",
+          "confidence": 0.91,
+          "notes": null
+        },
+        {
+          "subject": "her husband",
+          "predicate": "knows",
+          "object_entity": null,
+          "object_value": "safe code",
+          "object_fact_ref": null,
+          "polarity": true,
+          "starts_here": true,
+          "ends_here": false,
+          "supporting_quote": "Her husband knows the safe code.",
+          "confidence": 0.8,
+          "notes": null
+        }
+      ],
+      "scene_presence": ["MARCUS", "Marcus Hale", "her husband"],
+      "deaths": [],
+      "destructions": [],
+      "open_questions": []
+    }
+  ]
+}

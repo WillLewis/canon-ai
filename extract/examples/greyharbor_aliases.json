@@ -1,0 +1,109 @@
+{
+  "entities": [
+    {
+      "name": "Mara Voss",
+      "kind": "character",
+      "dossier": "Mara Voss, Tobias's niece, searches for her brother Danny and reads the ledger.",
+      "aliases": [
+        {"alias": "MARA", "kind": "name_variant"},
+        {"alias": "Mara", "kind": "name_variant"}
+      ]
+    },
+    {
+      "name": "Tobias Voss",
+      "kind": "character",
+      "dossier": "Tobias Voss is Mara's uncle and Greyharbor's harbormaster.",
+      "aliases": [
+        {"alias": "TOBIAS", "kind": "name_variant"},
+        {"alias": "Tobias", "kind": "name_variant"},
+        {"alias": "your uncle", "kind": "role_reference"},
+        {"alias": "uncle", "kind": "role_reference"},
+        {"alias": "harbormaster", "kind": "role_reference"}
+      ]
+    },
+    {
+      "name": "Edda Quinn",
+      "kind": "character",
+      "dossier": "Edda Quinn is the harbor cook and warns Mara about Tobias's numbers.",
+      "aliases": [
+        {"alias": "EDDA", "kind": "name_variant"},
+        {"alias": "Edda", "kind": "name_variant"}
+      ]
+    },
+    {
+      "name": "Cole Brannigan",
+      "kind": "character",
+      "dossier": "Deputy Cole Brannigan is a deputy in Greyharbor.",
+      "aliases": [
+        {"alias": "COLE", "kind": "name_variant"},
+        {"alias": "Cole", "kind": "name_variant"},
+        {"alias": "DEPUTY COLE BRANNIGAN", "kind": "name_variant"},
+        {"alias": "the deputy", "kind": "role_reference"},
+        {"alias": "deputy", "kind": "role_reference"},
+        {"alias": "C.B.", "kind": "nickname"}
+      ]
+    },
+    {
+      "name": "Danny Voss",
+      "kind": "character",
+      "dossier": "Danny Voss is Mara's missing brother.",
+      "provisional": true,
+      "aliases": [
+        {"alias": "Danny", "kind": "name_variant"},
+        {"alias": "her brother", "kind": "role_reference"},
+        {"alias": "brother", "kind": "role_reference"}
+      ]
+    },
+    {
+      "name": "Chapel on the Point",
+      "kind": "location",
+      "dossier": "The old chapel on the point has a loose floor stone where Tobias hides the leather ledger.",
+      "aliases": [
+        {"alias": "Chapel", "kind": "name_variant"},
+        {"alias": "chapel", "kind": "name_variant"},
+        {"alias": "the old chapel on the point", "kind": "name_variant"},
+        {"alias": "old chapel", "kind": "name_variant"}
+      ]
+    },
+    {
+      "name": "Harbormaster's Office",
+      "kind": "location",
+      "dossier": "Tobias's office at the harbor.",
+      "aliases": [
+        {"alias": "office", "kind": "name_variant"},
+        {"alias": "harbormaster's office", "kind": "name_variant"}
+      ]
+    },
+    {
+      "name": "Greyharbor Docks",
+      "kind": "location",
+      "dossier": "The docks in Greyharbor.",
+      "aliases": [
+        {"alias": "docks", "kind": "name_variant"},
+        {"alias": "Greyharbor Docks", "kind": "name_variant"}
+      ]
+    },
+    {
+      "name": "Leather Ledger",
+      "kind": "object",
+      "dossier": "The real ledger of Thursday numbers hidden by Tobias.",
+      "aliases": [
+        {"alias": "LEATHER LEDGER", "kind": "name_variant"},
+        {"alias": "Leather Ledger", "kind": "name_variant"},
+        {"alias": "ledger", "kind": "name_variant"},
+        {"alias": "real ledger", "kind": "name_variant"},
+        {"alias": "Thursday numbers", "kind": "nickname"},
+        {"alias": "that book", "kind": "role_reference"}
+      ]
+    },
+    {
+      "name": "Danny-Lee",
+      "kind": "object",
+      "dossier": "Danny's skiff.",
+      "aliases": [
+        {"alias": "DANNY-LEE", "kind": "name_variant"},
+        {"alias": "skiff", "kind": "name_variant"}
+      ]
+    }
+  ]
+}
