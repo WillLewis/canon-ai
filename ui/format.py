@@ -89,4 +89,29 @@ def object_side(a: dict) -> dict:
     return {"kind": "none"}
 
 
+def plain_assertion(a: dict) -> str:
+    """One plain-English line for an assertion row: 'Mara promised Danny',
+    'Danny not alive', 'Ledger located at “the chapel”'.
+
+    Pure formatting of graph values — subject name, predicate, object — nothing
+    is phrased or generated. Intransitive predicates (dies/destroyed/alive) get
+    a synthesized object_value equal to the predicate at load time
+    (canon/store.py synth_object_value); that placeholder is display noise, so
+    it is dropped here rather than echoed.
+    """
+    o = object_side(a)
+    subject = a.get("subject_name") or f"entity #{a.get('subject_id')}"
+    predicate = (a.get("predicate") or "").replace("_", " ")
+    if not a.get("polarity", True):
+        predicate = f"not {predicate}"
+    parts = [subject, predicate]
+    if o["kind"] == "entity":
+        parts.append(o.get("name") or f"entity #{o['id']}")
+    elif o["kind"] == "value" and o["value"] != a.get("predicate"):
+        parts.append(f"“{o['value']}”")
+    elif o["kind"] == "assertion":
+        parts.append(f"assertion #{o['id']}")
+    return " ".join(p for p in parts if p)
+
+
 SEVERITY_RANK = {"critical": 0, "warning": 1, "note": 2}

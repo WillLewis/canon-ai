@@ -17,7 +17,9 @@ write the `seals` table exactly as the checker reads it (the same
 `(check_name, assertion_a, coalesce(assertion_b,0))` key used in canon/check.py)
 and mirror the result onto `findings.sealed` so a re-check is not required to see
 the change — and `set_note_status`, the note surface's one write: the permanent
-open -> sealed/dismissed transition on `coverage_notes`, with attribution.
+open -> sealed/dismissed transition on `coverage_notes`, with attribution — and
+`rule_assertion`, the confirm queue's one write: the guarded draft -> canon/
+rejected transition, audited via ops.metering.
 """
 
 from __future__ import annotations
@@ -33,6 +35,14 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from canon.ingest import connect, resolve_db_url  # noqa: E402  (read-only import)
+from ops import metering  # noqa: E402  (confirm-queue audit rows; never edited here)
+
+# Audit rows for confirm-queue rulings are zero-token, so their cost is 0 with
+# any model — but record_usage suffixes the kind with ':unpriced' when the
+# model is unknown, which would make 'confirm_ruling' rows un-greppable. Pass a
+# priced model id to keep the kind clean; usage_events stores no model column,
+# so nothing false is recorded.
+_AUDIT_MODEL = next(iter(metering.PRICING))
 
 # The loaded dev world lives here (task brief); env vars still win via resolve_db_url.
 DEFAULT_LOCAL_URL = "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
@@ -305,6 +315,82 @@ def get_assertion(world_id: int, assertion_id: int) -> dict | None:
             order by id
         """, {"w": world_id, "id": assertion_id})
     return row
+
+
+# ---------------------------------------------------------------------------
+# Confirm queue (P3-CONFIRM): drafts are the queue. canon/store.py loads every
+# assertion below the confidence gate (0.85) as status 'draft'; the queue view
+# lists them and the writer's ruling settles each one — 'canon' or 'rejected'.
+# ---------------------------------------------------------------------------
+
+# ruling status -> the usage_events audit kind recorded for it.
+ASSERTION_RULINGS = {"canon": "confirm_ruling", "rejected": "reject_ruling"}
+
+
+def list_draft_assertions(world_id: int) -> list[dict]:
+    """The confirm queue: every 'draft' assertion, most-confident first, with
+    the same projection the assertion views use (quote + scene included)."""
+    with db_conn() as conn:
+        return _all(conn, _ASSERTION_SELECT + """
+            where a.world_id = %(w)s and a.status = 'draft'
+            order by a.confidence desc, a.id
+        """, {"w": world_id})
+
+
+def count_drafts(world_id: int) -> int:
+    """How many drafts await a ruling — the report view's 'Verify your canon (N)' pill."""
+    with db_conn() as conn:
+        row = _one(conn, """
+            select count(*) n from assertions
+            where world_id = %(w)s and status = 'draft'
+        """, {"w": world_id})
+    return row["n"] if row else 0
+
+
+def last_story_position(world_id: int) -> int | None:
+    """The corpus's last story position — the empty queue's 'clean through scene X'."""
+    with db_conn() as conn:
+        row = _one(conn, """
+            select max(s.story_position) p
+            from scenes s join works wk on wk.id = s.work_id
+            where wk.world_id = %(w)s
+        """, {"w": world_id})
+    return row["p"] if row else None
+
+
+def rule_assertion(world_id: int, assertion_id: int, status: str,
+                   ruled_by: str | None = None) -> bool:
+    """Confirm or reject one draft assertion — the confirm queue's only write.
+
+    The WHERE guards status='draft', so rulings are idempotent and can never
+    flip a settled row (canon, rejected, retconned). Confirming also sets
+    confirmed_by_human, matching canon.store.status_for's confirmed -> canon
+    promotion. Attribution: the assertions table has no confirmed_by column yet
+    (MIGRATIONS-NEEDED.md — set confirmed_by/confirmed_at here once the columns
+    land), so each applied ruling writes a usage_events audit row instead
+    (kind per ASSERTION_RULINGS, zero tokens, user + world attributed).
+    """
+    if status not in ASSERTION_RULINGS:
+        raise ValueError(
+            f"status must be one of {sorted(ASSERTION_RULINGS)}, got {status!r}")
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            update assertions
+               set status = %(s)s,
+                   confirmed_by_human = confirmed_by_human or %(confirm)s
+             where id = %(id)s and world_id = %(w)s and status = 'draft'
+             returning id
+        """, {"s": status, "confirm": status == "canon",
+              "id": assertion_id, "w": world_id})
+        changed = cur.fetchone() is not None
+        if changed:
+            metering.record_usage(
+                cur, user_id=ruled_by, world_id=world_id,
+                kind=ASSERTION_RULINGS[status],
+                tokens_in=0, tokens_out=0, model=_AUDIT_MODEL)
+        conn.commit()
+    return changed
 
 
 # ---------------------------------------------------------------------------
