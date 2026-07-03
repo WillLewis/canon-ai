@@ -836,7 +836,9 @@ def phrase_family_with_llm(
         return []
     req: dict[str, Any] = {
         "model": model,
-        "max_tokens": 4000,
+        # Adaptive thinking spends from the same budget as the JSON output;
+        # 4000 truncated a real run mid-string (first live theater run, 2026-07-03).
+        "max_tokens": 16000,
         "system": REPORT_SYSTEM_PROMPT,
         "messages": [{"role": "user", "content": _family_prompt(family, candidates)}],
         "output_config": {"format": {"type": "json_schema", "schema": note_schema()}},
@@ -851,7 +853,14 @@ def phrase_family_with_llm(
     text = first_text(resp)
     if text is None:
         raise RuntimeError(f"no text block in report {family} response")
-    payload = json.loads(text)
+    if getattr(resp, "stop_reason", None) == "max_tokens":
+        # Truncated JSON is unusable. Deterministic phrasing beats a dead run:
+        # the fallback only re-words candidates, so the grounding law holds.
+        return deterministic_draft_notes(family, candidates)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return deterministic_draft_notes(family, candidates)
     return payload.get("notes") or []
 
 
