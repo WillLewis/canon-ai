@@ -83,6 +83,8 @@ WORLD_DELETE_ORDER: list[tuple[str, str]] = [
 # assertions/entities) but only when the migration has actually run.
 OPTIONAL_WORLD_DELETES: list[tuple[str, str]] = [
     ("world_rules", "DELETE FROM world_rules WHERE world_id = %(w)s"),  # P3-RULES
+    # P3-ENGINE: per-world check-family toggles
+    ("world_family_config", "DELETE FROM world_family_config WHERE world_id = %(w)s"),
 ]
 
 

@@ -89,6 +89,10 @@ WORLD_TABLES: dict[str, str] = {
 # skipped when the migration has not run yet. Feature-detected per export.
 OPTIONAL_WORLD_TABLES: dict[str, str] = {
     "world_rules": "SELECT * FROM world_rules WHERE world_id = %(w)s ORDER BY id",  # P3-RULES
+    # P3-ENGINE: per-world check-family toggles (20260703090000_report_engine_hardening)
+    "world_family_config": (
+        "SELECT * FROM world_family_config WHERE world_id = %(w)s ORDER BY family"
+    ),
 }
 
 # Account-scoped tables, exported by export_account via %(u)s.
