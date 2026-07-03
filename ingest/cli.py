@@ -10,7 +10,7 @@ from .pipeline import ingest_files, records_to_json
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m ingest",
-        description="Segment Fountain, PDF, and docx scripts into Canon scene-record JSON.",
+        description="Segment Fountain, FDX, PDF, and docx scripts into Canon scene-record JSON.",
     )
     parser.add_argument("files", nargs="+", help="script files, directories, or shell globs")
     parser.add_argument("--out", help="write JSON to this path instead of stdout")
