@@ -8,8 +8,8 @@
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
 <header class="topbar">
-  <div class="brand"><a href="/{% if world %}?world={{ world.name|urlencode }}{% endif %}">Canon<span class="dot">·</span>Workbench</a></div>
-  {% if world %}
+  <div class="brand">{% if share_mode %}Canon{% else %}<a href="/{% if world %}?world={{ world.name|urlencode }}{% endif %}">Canon<span class="dot">·</span>Workbench</a>{% endif %}</div>
+  {% if world and not share_mode %}
   <nav class="mainnav">
     <a href="/worlds/{{ world.id }}/report" class="{{ 'on' if nav=='report' }}">Report</a>
     <a href="/worlds/{{ world.id }}/script" class="{{ 'on' if nav=='script' }}">Script</a>
@@ -29,7 +29,7 @@
     </select>
   </form>
   {% endif %}
-  <nav class="mainnav plan"><a href="/billing" class="{{ 'on' if nav=='billing' }}">Plan</a></nav>
+  {% if not share_mode %}<nav class="mainnav plan"><a href="/billing" class="{{ 'on' if nav=='billing' }}">Plan</a></nav>{% endif %}
 </header>
 
 <main class="content">
@@ -38,7 +38,11 @@
 
 <footer class="foot">
   <span>{% block foottag %}Read-only inspector — a microscope for the engine.{% endblock %}</span>
+  {% if share_mode %}
+  <span class="share-cta">Canon never writes your story — it keeps it true. Shared read-only via Canon — <a href="/billing">run your own script through Canon</a>.</span>
+  {% else %}
   <span class="rule">Canon never writes story · every claim cites its source. · <a href="/legal/terms">Terms &amp; trust</a></span>
+  {% endif %}
 </footer>
 {% block scripts %}{% endblock %}
 </body>
