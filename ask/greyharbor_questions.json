@@ -1,0 +1,76 @@
+{
+  "world": "greyharbor",
+  "fixture_files": [
+    "fixtures/greyharbor/ep101.fountain",
+    "fixtures/greyharbor/ep102.fountain"
+  ],
+  "questions": [
+    {
+      "id": "q01_cole_ledger_knowledge",
+      "question": "what does Cole know about the ledger, and when?",
+      "answer_contains": ["Cole Brannigan", "knows", "ledger location"],
+      "citations": ["E102/sc1"]
+    },
+    {
+      "id": "q02_tobias_death",
+      "question": "when does Tobias die?",
+      "answer_contains": ["Tobias Voss", "dies"],
+      "citations": ["E101/sc5"]
+    },
+    {
+      "id": "q03_ledger_location",
+      "question": "where is the leather ledger hidden?",
+      "answer_contains": ["Leather Ledger", "located_at", "Chapel on the Point"],
+      "citations": ["E101/sc3"]
+    },
+    {
+      "id": "q04_mara_cannot",
+      "question": "what can't Mara do?",
+      "answer_contains": ["Mara Voss", "cannot", "drive"],
+      "citations": ["E101/sc1"]
+    },
+    {
+      "id": "q05_ledger_knowers_order",
+      "question": "who knows the ledger's location in the order they learned it?",
+      "answer_contains": ["Tobias Voss", "Cole Brannigan", "Mara Voss", "ledger location"],
+      "citations": ["E101/sc3", "E102/sc1", "E102/sc2"]
+    },
+    {
+      "id": "q06_edda_belief",
+      "question": "what does Edda believe about the ledger?",
+      "answer_contains": ["Edda Quinn", "believes", "real ledger not in office"],
+      "citations": ["E101/sc2"]
+    },
+    {
+      "id": "q07_mara_open_promise",
+      "question": "what open promises does Mara have?",
+      "answer_contains": ["Mara Voss", "promised", "find Danny"],
+      "citations": ["E101/sc4"]
+    },
+    {
+      "id": "q08_cole_job",
+      "question": "what is Cole's job?",
+      "answer_contains": ["Cole Brannigan", "occupation", "deputy"],
+      "citations": ["E102/sc1"]
+    },
+    {
+      "id": "q09_chapel_event",
+      "question": "what happened to the chapel?",
+      "answer_contains": ["Chapel on the Point", "destroyed"],
+      "citations": ["E101/sc6"]
+    },
+    {
+      "id": "q10_mara_knowledge_at_scene",
+      "question": "what does Mara know at scene 8?",
+      "answer_contains": ["Mara Voss", "knows", "ledger location"],
+      "citations": ["E102/sc2"]
+    }
+  ],
+  "unsupported": [
+    {
+      "id": "u01_no_support",
+      "question": "what does Dani know at scene 14?",
+      "expected_status": "no_support"
+    }
+  ]
+}
