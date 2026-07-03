@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{# Terms & trust page (P3-TRUST). Every section is a plain-English draft of the
+   product's trust position — CLAUDE.md's one rule, made contractual. All copy
+   below is MARKED DRAFT — FOR LEGAL REVIEW and must not ship to a public
+   pricing page until counsel signs off. #}
+{% block title %}Terms & Trust · Canon AI{% endblock %}
+{% block foottag %}Terms &amp; trust — leaving must be as easy as arriving.{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Terms &amp; Trust <span class="sub-inline">— Canon AI</span></h1>
+  <p class="sub"><strong>DRAFT — FOR LEGAL REVIEW.</strong> This page states the product's
+    commitments in plain English. It is not yet a reviewed legal document.</p>
+</div>
+
+<section class="panel" id="your-ip">
+  <h2>1 · Your IP stays yours <span class="count">DRAFT — FOR LEGAL REVIEW</span></h2>
+  <p>Everything you upload — scripts, world documents, notes — and everything Canon
+    derives from it (assertions, findings, reports, bibles) is <strong>your material</strong>.
+    You grant Canon a license only to the extent needed to operate the service for you:
+    storing your material, indexing it, running checks over it, and showing it back to you
+    and the collaborators you invite. No other license. No right to sublicense, publish,
+    or reuse your material for any other purpose.</p>
+</section>
+
+<section class="panel" id="no-training">
+  <h2>2 · No-training warranty <span class="count">DRAFT — FOR LEGAL REVIEW</span></h2>
+  <p>Canon never trains machine-learning models on your material, and never permits
+    anyone else to. The AI extraction step calls the Anthropic API in a
+    <strong>no-training configuration</strong>: your scripts are processed to index facts
+    you wrote, and are not used to train the models that process them. Canon holds this
+    line contractually with its providers and operationally in its own code.</p>
+</section>
+
+<section class="panel" id="deletion-guarantee">
+  <h2>3 · Export anytime, delete means deleted <span class="count">DRAFT — FOR LEGAL REVIEW</span></h2>
+  <p>You can <a href="/account/export.zip">export everything</a> at any time — every
+    stored row, your rulings and their attribution, the rendered bible and report —
+    in open formats (JSON Lines and Markdown). Deleting a world or your account removes
+    your content <strong>fully from the live product</strong>: rows are hard-deleted, not
+    hidden or flagged. Transient copies in short-lived infrastructure backups expire on
+    our provider's standard schedule and are never restored into the product; we state
+    this plainly rather than over-promise instant erasure of every backup medium.</p>
+</section>
+
+<section class="panel" id="no-literary-material">
+  <h2>4 · Canon never writes your story <span class="count">DRAFT — FOR LEGAL REVIEW</span></h2>
+  <p>Canon produces <strong>no literary material</strong> — no loglines, no dialogue, no
+    pitches, no beats, no synopses. It indexes, retrieves, checks, and explains what you
+    wrote, and every flag or answer cites the scene that establishes it. The writer is the
+    only generator. A feature that would require generating story content is out of scope
+    of this product, by design and by policy.</p>
+</section>
+
+<p class="muted small">Questions about any of the above: the export and delete controls
+  live on each world's page and on your account page — they are product features, not a
+  support ticket.</p>
+
+{% endblock %}
