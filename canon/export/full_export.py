@@ -93,6 +93,17 @@ OPTIONAL_WORLD_TABLES: dict[str, str] = {
     "world_family_config": (
         "SELECT * FROM world_family_config WHERE world_id = %(w)s ORDER BY family"
     ),
+    # P3-FRONTDOOR: background ingest runs + their narration event ledger
+    # (20260703110000_pipeline_runs). The candidates jsonb is the writer's own
+    # extracted material, so it leaves with them like everything else.
+    "pipeline_runs": (
+        "SELECT * FROM pipeline_runs WHERE world_id = %(w)s ORDER BY created_at, id"
+    ),
+    "pipeline_run_events": (
+        "SELECT ev.* FROM pipeline_run_events ev "
+        "JOIN pipeline_runs r ON r.id = ev.run_id "
+        "WHERE r.world_id = %(w)s ORDER BY ev.run_id, ev.seq"
+    ),
 }
 
 # Account-scoped tables, exported by export_account via %(u)s.
