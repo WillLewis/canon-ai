@@ -29,7 +29,7 @@ Writers of serialized fiction must hold an ever-growing canon — who knows what
 - **No story generation of any kind** — not a goal at any version; see Positioning.
 - **No writers'-room / enterprise product** — requires show-level data rights, security certifications (SOC 2, TPN), and a sales motion a solo side project can't run. Deferred until a prosumer wedge wins.
 - **No Final Draft sidecar / editor integration** — only matters for the staffed-TV segment; premature.
-- **No branching, canon-time vs. story-time bitemporality, or multi-writer governance** — v3 architecture; v0 is single branch, single writer, story-position axis only.
+- **No branching, canon-time vs. story-time bitemporality, or multi-writer merge governance** — v3 architecture; v0 is single branch, single writer, story-position axis only. (Shared worlds with roles + attributed rulings — collaboration without merge — are Phase 3 launch scope, not this.)
 - **No agents-as-product (review panel, Audience Memory)** — requires pgvector + UI; the underlying checks ship first as a CLI/report.
 
 ## User stories (priority order)
@@ -53,18 +53,20 @@ Writers of serialized fiction must hold an ever-growing canon — who knows what
 
 ### P1 — fast follows once a wedge wins
 - **R7 Build-mode bible export:** canon graph → formatted series-bible document with citations (the Test B deliverable, productized).
-- **R8 Hole-finder report:** unanswered-question generation over the graph (gaps in rules, unresolved knowledge states, dangling setups).
-- **R9 Minimal web app:** Supabase auth + RLS, upload, report viewing; one writer = one world.
-- **R10 Setup/payoff tracker:** open hooks and idle threads with age ("Maya's debt — unresolved since 104").
+- **R8 Reader's Report** (subsumes hole-finder + setup/payoff; full spec: `docs/readers-report.md`): grounded coverage document — deterministic candidate queries, LLM does selection/phrasing only, citation validator drops anything that doesn't verify, note families F1–F4 with per-family dismissal-rate kill switches, seal/dismiss permanence. First script free; account required (email or Google). *AC: planted coverage items in greyharbor found, decoys not flagged; report ≤ 2 pages.*
+- **R9 Minimal web app:** Supabase auth (email + Google) + RLS, upload, report viewing; one writer = one world. Surface spec: "note surface" section of `docs/readers-report.md` (script-first split view, anchored notes, one-keystroke triage, draft-2 diff).
+- **R10 Retcon ripple report:** writer proposes a change → every assertion, scene, and check that would conflict, with citations. Fully deterministic intersection queries; zero generation. (Was: setup/payoff tracker — now folded into R8 family F2.)
 
 ### P2 — architectural insurance (design for, don't build)
+- Audience-knowledge ledger: audience as a pseudo-entity in the epistemic layer → provable reference-before-reveal and open-question-age notes (`docs/readers-report.md` #3).
+- Canon-as-infrastructure API: the consistency referee for interactive/generative narrative systems (`docs/readers-report.md` #4).
 - Agent review panel (the checks, re-skinned as cited findings feed) + Audience Memory via pgvector.
 - Canon-time vs. story-time bitemporality; branches; multi-writer merge.
 - FDX sidecar; show-level enterprise deploy; provenance/rights-ledger layer.
 
 ## Success metrics
 
-- **Leading:** Phase 0 exit-criteria pass; Test B conversion (5 paid at $99–199) and cleanup-hours trend; Test C week-2 unprompted return rate; Test A go/kill signal tally.
+- **Leading:** Phase 0 exit-criteria pass; Test B conversion (5 paid at $99–199) and cleanup-hours trend; Test C week-2 unprompted return rate; Test A go/kill signal tally; Reader's Report per-section engagement (seal / dismiss / addressed-by-next-draft / forwards).
 - **Lagging (post-convergence):** MRR from the chosen wedge; % of scans producing a finding the writer acts on; sealed-rate (proxy for false-positive trust); count of "can I run this on my show?" bridge signals.
 
 ## Open questions
