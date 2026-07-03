@@ -38,11 +38,50 @@ templates = Jinja2Templates(directory=str(_HERE / "templates"))
 # here so parallel workstreams never had to edit this file (docs/workstreams.md).
 from billing.routes import router as _billing_router  # noqa: E402
 from . import rules_ui as _rules_ui  # noqa: E402
+from . import share_ui as _share_ui  # noqa: E402
 from . import trust_ui as _trust_ui  # noqa: E402
 
 app.include_router(_billing_router)
 app.include_router(_rules_ui.router)
+app.include_router(_share_ui.router)
 app.include_router(_trust_ui.router)
+
+# ---------------------------------------------------------------------------
+# Ops wiring (P3-WIRING): the ask rate limit, per docs/ops.md. Reads (report/
+# script views) stay unlimited; only the POST that runs the ask engine spends
+# quota, and only after it succeeds (record_action counting contract). The
+# tier hook is billing's resolver: CANON_FORCE_TIER wins (dev override, incl.
+# the AUTH_DISABLED bypass user), else billing_subscriptions, else 'free'.
+# ---------------------------------------------------------------------------
+from billing import store as _billing_store  # noqa: E402
+from ops import alerts as _ops_alerts  # noqa: E402
+from ops import ratelimit as _ops_ratelimit  # noqa: E402
+from ops.middleware import rate_limited as _rate_limited  # noqa: E402
+
+
+def _ops_cursor_factory():
+    # Resolved through the db module at call time so tests can fake db.ops_cursor.
+    return db.ops_cursor()
+
+
+# Module attribute (not a closure) so tests can swap in a fake tier resolver.
+ask_tier_resolver = _billing_store.make_tier_resolver(_ops_cursor_factory)
+
+_ask_guard = _rate_limited("ask", cursor_factory=_ops_cursor_factory,
+                           tier_resolver=lambda user: ask_tier_resolver(user))
+
+
+def _record_ask(world_id: int, user) -> None:
+    """Log one consumed ask AFTER it succeeded (denied/failed attempts are
+    free). Recording failure never breaks the answer — same fail-open stance
+    as the rest of the ops floor, and the alert is how we notice."""
+    try:
+        _ops_ratelimit.record_action(
+            db.ops_cursor(), user_id=getattr(user, "id", None) or str(user),
+            action="ask", world_id=world_id)
+    except Exception as exc:
+        _ops_alerts.alert("ratelimit_db_error", {
+            "action": "ask", "stage": "record_action", "error": repr(exc)})
 
 # Expose the pure display helpers to every template.
 templates.env.globals["gloss_range"] = gloss_range
@@ -229,7 +268,10 @@ def findings(request: Request, world: str | None = None):
     active = _pick_world(world, worlds)
     if not active:
         return _no_world(request, worlds)
-    rows = db.list_findings(active["id"])
+    # Composed: universal checks + writer-authored rules, exceptions applied
+    # (canon.rules.compose_findings; falls back to plain findings when the
+    # world_rules table hasn't landed on this database).
+    rows = db.list_findings_composed(active["id"])
     return _render(request, "findings.html", active, worlds, nav="findings",
                    findings=rows)
 
@@ -314,7 +356,7 @@ def _report_context(request: Request, world_id: int,
     names = db.entity_names(world_id, note_vm.all_entity_ids(notes))
     note_vm.decorate_notes(world_id, notes, names)
     grouped = note_vm.split_notes(notes)
-    live, sealed_findings = _live_first(db.list_findings(world_id))
+    live, sealed_findings = _live_first(db.list_findings_composed(world_id))
     role, can_edit = _surface_role(request, world_id)
     summary = db.world_summary(world_id)
     # The "Verify your canon (N)" pill count. world_summary already carries the
@@ -369,7 +411,7 @@ def _script_context(request: Request, world_id: int, scene: int | None,
     note_vm.decorate_notes(world_id, notes, names)
     by_scene = note_vm.notes_by_scene(notes)
     findings_by_scene: dict[int, list[dict]] = {}
-    live, _sealed = _live_first(db.list_findings(world_id))
+    live, _sealed = _live_first(db.list_findings_composed(world_id))
     for f in live:
         if f.get("scene_id"):
             findings_by_scene.setdefault(f["scene_id"], []).append(f)
@@ -419,14 +461,18 @@ async def dismiss_note(request: Request, world_id: int, note_id: str,
 
 
 @app.post("/worlds/{world_id}/ask", response_class=HTMLResponse)
-async def ask_pane(request: Request, world_id: int):
+async def ask_pane(request: Request, world_id: int,
+                   user: auth.User = Depends(_ask_guard)):
     """The ask-the-bible pane. Calls ask/engine.py (SQL templates, no LLM) and
     re-renders whichever view hosted the pane, answer + citations included.
-    Refusals render verbatim — an uncited answer never ships."""
+    Refusals render verbatim — an uncited answer never ships. Rate-limited per
+    account (429 + Retry-After over the tier's quota; docs/ops.md)."""
     form = await _form(request)
     question = (form.get("question") or "").strip()
     view = form.get("view") or "report"
     result = db.ask_question(world_id, question) if question else None
+    if result is not None:
+        _record_ask(world_id, user)   # success spends quota; nothing else does
     if view == "script":
         scene = form.get("scene")
         ctx = _script_context(request, world_id,
