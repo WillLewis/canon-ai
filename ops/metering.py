@@ -122,6 +122,25 @@ def meter(kind: str, *, cursor, user_id, world_id=None, model: str | None = None
     return Meter(kind, cursor=cursor, user_id=user_id, world_id=world_id, model=model)
 
 
+# --- pre-run estimate (P3-FRONTDOOR upload gate) -------------------------------
+
+# Per-page token heuristics calibrated to docs/readers-report.md's unit
+# economics (feature ~110pp -> ~285k in / ~56k out across the whole pipeline):
+# the multiplier folds the resolution + report passes on top of extraction.
+EST_TOKENS_IN_PER_PAGE = 1700
+EST_TOKENS_OUT_PER_PAGE = 350
+EST_PIPELINE_MULTIPLIER = Decimal("1.6")
+
+
+def estimate_script_cost(pages: int, model: str | None) -> Decimal:
+    """Rough full-pipeline COGS estimate for a script of `pages` pages, priced
+    from PRICING above. Used by the upload gate BEFORE any LLM call (vs
+    CANON_RUN_COGS_CAP_USD). Unknown model -> Decimal('0') (unpriced)."""
+    cost, _priced = cost_usd(model, int(pages) * EST_TOKENS_IN_PER_PAGE,
+                             int(pages) * EST_TOKENS_OUT_PER_PAGE)
+    return cost * EST_PIPELINE_MULTIPLIER
+
+
 # --- rollups -----------------------------------------------------------------
 
 def _rollup(row) -> dict:
