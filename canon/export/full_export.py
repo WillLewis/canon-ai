@@ -102,6 +102,14 @@ ACCOUNT_TABLES: dict[str, str] = {
         "SELECT * FROM world_members WHERE user_id = %(u)s::uuid ORDER BY world_id"
     ),
     "usage_events": "SELECT * FROM usage_events WHERE user_id = %(u)s::uuid ORDER BY id",
+    # Billing state (P3-BILLING, landed by 20260703100000_queued_ddl_and_
+    # attribution.sql): the writer's data, so it leaves with them too.
+    "billing_customers": (
+        "SELECT * FROM billing_customers WHERE user_id = %(u)s::uuid"
+    ),
+    "billing_subscriptions": (
+        "SELECT * FROM billing_subscriptions WHERE user_id = %(u)s::uuid"
+    ),
 }
 
 # Tables that exist in the schema but are deliberately NOT exported. Every

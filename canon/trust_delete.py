@@ -3,9 +3,10 @@
 Pure cursor functions, deterministic, no soft-delete ambiguity: `delete_world`
 removes every row of a world's material in FK-safe order (children first) and
 `delete_account` removes an account — its solely-owned worlds, its memberships
-on co-owned worlds, its usage history, and finally its profile. Both return
-per-table deleted counts so the confirmation page can show the writer exactly
-what left the database.
+on co-owned worlds (after handing worlds.owner_id on those survivors to the
+earliest surviving owner), its usage history, its billing rows, and finally
+its profile. Both return per-table deleted counts so the confirmation page can
+show the writer exactly what left the database.
 
 Scope notes (deliberate, documented):
 
@@ -112,10 +113,16 @@ def _rowcount(cursor) -> int:
 # Account deletion
 # ---------------------------------------------------------------------------
 
-# Billing lands in a parallel workstream (P3-BILLING). Until its table names
-# are final we feature-detect: any public table named billing_* or stripe_*
-# with a user_id column gets this user's rows deleted. WHEN BILLING LANDS, its
-# tables MUST be listed here explicitly (and in the completeness cross-check).
+# Billing tables (P3-BILLING), landed by 20260703100000_queued_ddl_and_
+# attribution.sql. Deletion stays feature-detected — any public table named
+# billing_* or stripe_* with a user_id column gets this user's rows deleted —
+# so environments that have not run the migration yet still work; the explicit
+# list below is the completeness contract (tests/test_trust.py cross-checks it
+# against the schema, and asserts the feature-detect patterns cover it).
+# The two tables are FK-independent, so the detect's alphabetical order
+# (customers, then subscriptions) is safe; both go before profiles.
+BILLING_DELETE_TABLES: tuple[str, ...] = ("billing_customers", "billing_subscriptions")
+
 _BILLING_TABLE_SQL = (
     "SELECT c.table_name FROM information_schema.columns c "
     "JOIN information_schema.tables t "
@@ -129,9 +136,9 @@ _BILLING_TABLE_SQL = (
 def solely_owned_world_ids(cursor, user_id: str) -> list[int]:
     """Worlds this account owns outright: worlds.owner_id is this user AND no
     other user holds the 'owner' role via world_members. A world with a second
-    owner survives account deletion (only the membership rows go); its
-    worlds.owner_id then points at a deleted account — reassignment is the
-    surviving owner's move, queued for the wiring wave."""
+    owner survives account deletion (only the membership rows go);
+    delete_account then reassigns its worlds.owner_id to a surviving owner
+    (see _REASSIGN_SURVIVING_OWNERS)."""
     cursor.execute(
         "SELECT w.id FROM worlds w WHERE w.owner_id = %(u)s::uuid "
         "AND NOT EXISTS (SELECT 1 FROM world_members m WHERE m.world_id = w.id "
@@ -141,12 +148,29 @@ def solely_owned_world_ids(cursor, user_id: str) -> list[int]:
     return [row[0] if not isinstance(row, dict) else row["id"] for row in cursor.fetchall()]
 
 
+# Co-owned worlds survive account deletion, but their worlds.owner_id would
+# dangle at the deleted account. Reassign it to the earliest surviving owner
+# in world_members — deterministic: min created_at, tie-break user_id. Runs
+# after solely-owned worlds are deleted, so every remaining world with this
+# owner_id has (by definition of solely_owned_world_ids) another owner to
+# take over. RLS is unaffected either way (canon_world_role checks
+# world_members too); this keeps the column truthful.
+_REASSIGN_SURVIVING_OWNERS = (
+    "UPDATE worlds w SET owner_id = ("
+    "SELECT m.user_id FROM world_members m "
+    "WHERE m.world_id = w.id AND m.role = 'owner' AND m.user_id <> %(u)s::uuid "
+    "ORDER BY m.created_at, m.user_id LIMIT 1) "
+    "WHERE w.owner_id = %(u)s::uuid"
+)
+
+
 def delete_account(cursor, user_id: str) -> dict[str, int]:
     """Delete one account: solely-owned worlds (full delete_world each), then
-    memberships on co-owned worlds, usage history, billing rows (when those
-    tables exist), and the profile last. Returns aggregate per-table counts
-    (world content counts summed across deleted worlds, plus
-    'worlds_deleted'). Caller owns the transaction."""
+    owner_id handover on surviving co-owned worlds, memberships on those
+    worlds, usage history, billing rows (when those tables exist), and the
+    profile last. Returns aggregate per-table counts (world content counts
+    summed across deleted worlds, plus 'worlds_deleted' and
+    'worlds_reassigned'). Caller owns the transaction."""
 
     counts: dict[str, int] = {}
 
@@ -155,6 +179,12 @@ def delete_account(cursor, user_id: str) -> dict[str, int]:
         for table, n in delete_world(cursor, wid).items():
             counts[table] = counts.get(table, 0) + n
     counts["worlds_deleted"] = len(owned)
+
+    # Surviving co-owned worlds: hand owner_id to the earliest surviving owner
+    # BEFORE this user's membership rows go (the subquery excludes the user, so
+    # ordering is for clarity, not correctness).
+    cursor.execute(_REASSIGN_SURVIVING_OWNERS, {"u": user_id})
+    counts["worlds_reassigned"] = _rowcount(cursor)
 
     # Memberships on worlds that survive (co-owned / member-of): the user
     # leaves, the world stays. Solely-owned worlds' rows are already gone.

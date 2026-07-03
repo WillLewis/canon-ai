@@ -81,8 +81,9 @@ class FakeExportCursor:
 
 
 class FakeDeleteCursor:
-    """Records every DELETE in order; feature-detect and owned-worlds queries
-    are answered from constructor arguments."""
+    """Records every DELETE (and the owner-reassignment UPDATE) in order;
+    feature-detect and owned-worlds queries are answered from constructor
+    arguments."""
 
     def __init__(self, counts=None, existing=(), owned=(), billing=()):
         self.counts = counts or {}
@@ -91,6 +92,7 @@ class FakeDeleteCursor:
         self.billing = list(billing)
         self.deleted = []          # table names, in execution order
         self.delete_params = []
+        self.updates = []          # (normalized_sql, params) of UPDATE statements
         self.executed = []
         self._rows = []
         self.rowcount = 0
@@ -104,6 +106,10 @@ class FakeDeleteCursor:
             self._rows = [(1,)] if params[0] in self.existing else []
         elif "owner_id" in s and s.startswith("select"):
             self._rows = [(wid,) for wid in self.owned]
+        elif s.startswith("update worlds"):      # owner_id handover on survivors
+            self.updates.append((s, params))
+            self.rowcount = self.counts.get("worlds_reassigned", 0)
+            self._rows = []
         elif s.startswith("delete from"):
             table = re.match(r"delete from ([a-z_]+)", s).group(1)
             self.deleted.append(table)
@@ -165,6 +171,12 @@ ACCOUNT_TABLE_DATA = dict(WORLD_TABLE_DATA, **{
     "usage_events": (("id", "user_id", "world_id", "kind", "tokens_in", "tokens_out",
                       "cost_usd", "created_at"),
                      [(1, OWNER, 1, "extraction", 100, 50, "0.0012", "2026-07-01")]),
+    "billing_customers": (("user_id", "stripe_customer_id", "created_at"),
+                          [(OWNER, "cus_123", "2026-07-01")]),
+    "billing_subscriptions": (("user_id", "stripe_subscription_id", "status", "tier",
+                               "current_period_end", "updated_at"),
+                              [(OWNER, "sub_456", "active", "paid",
+                                "2026-08-01", "2026-07-01")]),
 })
 
 
@@ -249,7 +261,11 @@ def test_export_account_contains_profile_memberships_usage_and_world_zips():
     zf = zipfile.ZipFile(io.BytesIO(data))
     names = set(zf.namelist())
     assert {"manifest.json", "profiles.jsonl", "world_members.jsonl",
-            "usage_events.jsonl"} <= names
+            "usage_events.jsonl", "billing_customers.jsonl",
+            "billing_subscriptions.jsonl"} <= names
+    billing = [json.loads(x)
+               for x in zf.read("billing_subscriptions.jsonl").decode().splitlines()]
+    assert billing[0]["tier"] == "paid"  # billing state is the writer's data too
 
     manifest = json.loads(zf.read("manifest.json"))
     assert manifest["kind"] == "account_export"
@@ -298,11 +314,24 @@ def test_every_schema_table_is_registered_for_deletion():
     created = _created_tables()
     covered = ({t for t, _ in trust_delete.WORLD_DELETE_ORDER}
                | {t for t, _ in trust_delete.OPTIONAL_WORLD_DELETES}
+               | set(trust_delete.BILLING_DELETE_TABLES)
                | {"profiles", "usage_events", "world_members"})  # delete_account
     missing = created - covered
     assert not missing, (
         f"tables missing from the deletion order: {sorted(missing)} — "
         "add them to canon/trust_delete.py so 'delete everything' stays true")
+
+
+def test_billing_delete_tables_match_the_feature_detect_patterns():
+    # The explicit registry is the contract; the runtime path is the
+    # information_schema feature-detect (LIKE 'billing%'/'stripe%' + user_id).
+    # Every registered billing table must be reachable by those patterns, or
+    # delete_account would silently skip it on a real database.
+    for table in trust_delete.BILLING_DELETE_TABLES:
+        assert table.startswith(("billing", "stripe")), \
+            f"{table} would not match _BILLING_TABLE_SQL's LIKE patterns"
+    # And both must also be export-registered (the writer's data leaves too).
+    assert set(trust_delete.BILLING_DELETE_TABLES) <= set(full_export.ACCOUNT_TABLES)
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +391,28 @@ def test_co_owned_world_survives_account_deletion_minus_the_membership():
     assert cur.deleted == ["world_members", "usage_events", "profiles"]
     assert result["worlds_deleted"] == 0
     assert result["world_members"] == 1           # only the membership goes
+
+
+def test_delete_account_reassigns_owner_id_on_surviving_coowned_worlds():
+    cur = FakeDeleteCursor(counts={"worlds_reassigned": 1, "world_members": 1,
+                                   "usage_events": 3, "profiles": 1}, owned=[])
+    result = trust_delete.delete_account(cur, OWNER)
+    assert result["worlds_reassigned"] == 1
+    # One UPDATE, scoped to worlds this user still owns, choosing the earliest
+    # surviving owner deterministically (min created_at, tie-break user_id).
+    assert len(cur.updates) == 1
+    sql, params = cur.updates[0]
+    assert params == {"u": OWNER}
+    assert "set owner_id" in sql
+    assert "role = 'owner'" in sql
+    assert "m.user_id <> %(u)s::uuid" in sql              # never picks the deleted user
+    assert "order by m.created_at, m.user_id limit 1" in sql
+    assert sql.endswith("where w.owner_id = %(u)s::uuid")
+    # Handover happens before the user's membership rows are deleted.
+    upd_pos = [i for i, (s, _) in enumerate(cur.executed) if s.startswith("update worlds")]
+    del_pos = [i for i, (s, _) in enumerate(cur.executed)
+               if s.startswith("delete from world_members")]
+    assert upd_pos and del_pos and upd_pos[0] < del_pos[0]
 
 
 def test_delete_account_feature_detects_billing_tables():
