@@ -191,6 +191,7 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
     ordered = sorted(state.assertions,
                      key=lambda x: x.get("story_position") if x.get("story_position") is not None else (1 << 30))
     for a in ordered:
+        skip_char_location_sync = False
         subj = by_norm.get(resolve._norm(a.get("subject")))
         scene_id = scene_id_by_pos.get(a.get("story_position"))
         if subj is None or scene_id is None:
@@ -261,9 +262,12 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
                     )
                 else:
                     # Same position (or both backdated): genuine conflict. Do
-                    # not close the previous interval; inserting the mirror row
-                    # below will overlap and trip the exclusion constraint.
-                    pass
+                    # not close the previous interval and do not mirror this
+                    # row into character_locations. The scan check will report
+                    # the conflict from assertions; the exclusion mirror should
+                    # not abort fixture/load workflows that are meant to grade
+                    # the scan.
+                    skip_char_location_sync = True
 
         cur.execute(
             "INSERT INTO assertions "
@@ -279,7 +283,8 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
             seen_events.add((subj[0], predicate))
 
         if (predicate == "located_at" and subj[1] == "character"
-                and obj is not None and obj[1] == "location"):
+                and obj is not None and obj[1] == "location"
+                and not skip_char_location_sync):
             cur.execute(
                 "INSERT INTO character_locations "
                 "(assertion_id, character_id, location_id, valid_during) "
@@ -288,7 +293,7 @@ def store_state(conn, world_name: str, state_dict: dict, *, reset: bool = False,
             )
             n_char_loc += 1
 
-        if predicate == "located_at" and upper is None:
+        if predicate == "located_at" and upper is None and not skip_char_location_sync:
             # Backdated rows (lower None) are tracked too, so (,) gets closed by
             # the next move. This happens after the character_locations mirror
             # insert so failed conflicts do not advance local movement state.

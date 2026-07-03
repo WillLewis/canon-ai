@@ -310,7 +310,7 @@ def _epistemic_plan(
         where.append(_object_filter_sql().removeprefix("AND ").strip())
     if story_position is not None:
         params["story_position"] = story_position
-        where.append("a.valid_during @> :story_position")
+        where.append("a.valid_during @> :story_position::int")
     sql = (
         _base_assertion_select()
         + "WHERE "

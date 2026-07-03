@@ -8,7 +8,7 @@ create extension if not exists pgcrypto;
 
 -- ---------- enums ----------
 create type entity_kind as enum ('character','location','object','faction','event','rule','other');
-create type assertion_status as enum ('draft','canon','sealed','retconned');
+create type assertion_status as enum ('draft','canon','sealed','retconned','rejected');
 create type alias_kind as enum ('name_variant','nickname','role_reference');
 
 -- ---------- worlds (one writer's show/book/series) ----------
@@ -81,6 +81,9 @@ create table assertions (
 create index assertions_subj   on assertions (subject_id, predicate);
 create index assertions_valid  on assertions using gist (valid_during);
 create index assertions_status on assertions (world_id, status);
+create index assertions_world_valid on assertions using gist (world_id, valid_during);
+create index assertions_world_subject_predicate on assertions (world_id, subject_id, predicate);
+create index assertions_world_object on assertions (world_id, object_id) where object_id is not null;
 
 -- ---------- write-time continuity invariants (exclusion constraints) ----------
 -- A continuity rule as schema: one character cannot be located_at two places
@@ -106,6 +109,22 @@ create table scene_presence (
   entity_id bigint not null references entities(id),
   primary key (scene_id, entity_id)
 );
+create index scene_presence_entity_scene on scene_presence (entity_id, scene_id);
+
+-- ---------- per-world deterministic check / note family toggles ----------
+-- Absence means enabled. Disabled rows suppress matching db/checks.sql checks
+-- and Reader's Report F1-F4 note families without mutating existing rows.
+create table world_family_config (
+  world_id    bigint not null references worlds(id) on delete cascade,
+  family      text not null,
+  enabled     boolean not null default true,
+  updated_at  timestamptz not null default now(),
+  primary key (world_id, family),
+  check (family ~ '^[A-Za-z0-9_]+$')
+);
+create index world_family_config_disabled
+  on world_family_config (world_id, family)
+  where not enabled;
 
 -- ---------- check findings (output of db/checks.sql runs) ----------
 create table findings (
@@ -120,6 +139,7 @@ create table findings (
   sealed      boolean not null default false,   -- writer marked intentional
   run_at      timestamptz not null default now()
 );
+create index findings_world_check on findings (world_id, check_name, sealed);
 
 -- ---------- seals: permanent 'intentional' marks, independent of finding runs ----------
 create table seals (

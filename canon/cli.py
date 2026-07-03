@@ -15,9 +15,11 @@ from pathlib import Path
 from . import ask as ask_mod
 from . import check as check_mod
 from . import extract as extract_mod
+from . import families as family_mod
 from . import holes as holes_mod
 from . import ingest as ingest_mod
 from . import report as report_mod
+from . import ripple as ripple_mod
 from . import resolve as resolve_mod
 from . import store as store_mod
 
@@ -341,6 +343,50 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _world_id_for_name(conn, world: str) -> int | None:
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM worlds WHERE name = %s", (world,))
+    row = cur.fetchone()
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+    return row[0] if row else None
+
+
+def cmd_families(args: argparse.Namespace) -> int:
+    db_url = ingest_mod.resolve_db_url(args.db_url)
+    if db_url is None:
+        print("error: families requires a database (set CANON_DB_URL / DATABASE_URL / --db-url)",
+              file=sys.stderr)
+        return 2
+    try:
+        conn = ingest_mod.connect(db_url)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    try:
+        world_id = _world_id_for_name(conn, args.world)
+        if not world_id:
+            print(f"error: world '{args.world}' not found.", file=sys.stderr)
+            return 1
+        if args.disable:
+            family_mod.set_enabled(conn, world_id, args.disable, False)
+        if args.enable:
+            family_mod.set_enabled(conn, world_id, args.enable, True)
+        rows = family_mod.list_config(conn, world_id)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    for row in rows:
+        state = "on" if row["enabled"] else "off"
+        print(f"{row['family']:<24} {state:<3} {row['kind']}")
+    return 0
+
+
 def cmd_ask(args: argparse.Namespace) -> int:
     if args.dry_run:
         print("=== SYSTEM PROMPT ===")
@@ -546,6 +592,63 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ripple(args: argparse.Namespace) -> int:
+    db_url = ingest_mod.resolve_db_url(args.db_url)
+    if db_url is None:
+        print("error: ripple requires a database (set CANON_DB_URL / DATABASE_URL / --db-url)",
+              file=sys.stderr)
+        return 2
+    try:
+        conn = ingest_mod.connect(db_url)
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    try:
+        world_id = ripple_mod.world_id(conn, args.world)
+        if args.ripple_command == "cut-entity":
+            report = ripple_mod.cut_entity(conn, args.world, args.entity, kind=args.kind)
+        else:
+            assertion_id = getattr(args, "assertion_id", None)
+            subject = getattr(args, "subject", None)
+            predicate = getattr(args, "predicate", None)
+            from_pos = None
+            if getattr(args, "from_position", None) is not None:
+                from_pos = ripple_mod.position_for_ref(conn, world_id, args.from_position)
+            assertion = ripple_mod.find_assertion(
+                conn,
+                world_id,
+                assertion_id=assertion_id,
+                subject=subject,
+                predicate=predicate,
+                from_position=from_pos,
+            )
+            if args.ripple_command in ("move", "shift-event"):
+                to_pos = ripple_mod.position_for_ref(conn, world_id, args.to_position)
+                report = ripple_mod.move_assertion(conn, args.world, assertion, to_pos)
+            elif args.ripple_command == "remove":
+                report = ripple_mod.remove_assertion(conn, args.world, assertion)
+            else:
+                print(f"error: unknown ripple command {args.ripple_command}", file=sys.stderr)
+                return 2
+    except RuntimeError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    text = ripple_mod.to_json(report) if args.json else ripple_mod.render_text(report)
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(text + ("\n" if not text.endswith("\n") else ""), encoding="utf-8")
+        print(f"wrote {args.out}: {report['summary']['check_findings']} check finding(s)")
+    else:
+        print(text)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="canon", description="Canon AI CLI")
     sub = p.add_subparsers(dest="command", required=True)
@@ -642,6 +745,17 @@ def build_parser() -> argparse.ArgumentParser:
     chk.add_argument("--no-persist", action="store_true", help="don't write rows to the findings table")
     chk.set_defaults(func=cmd_check)
 
+    fam = sub.add_parser(
+        "families",
+        help="list or toggle per-world deterministic check/report families",
+    )
+    fam.add_argument("--world", required=True, help="world name")
+    fam.add_argument("--db-url", default=None, help="Postgres URL (else CANON_DB_URL / DATABASE_URL)")
+    group = fam.add_mutually_exclusive_group()
+    group.add_argument("--disable", default=None, help="family to disable, e.g. dead_speaker or F2")
+    group.add_argument("--enable", default=None, help="family to enable, e.g. dead_speaker or F2")
+    fam.set_defaults(func=cmd_families)
+
     ask = sub.add_parser(
         "ask", help="ask the bible: NL question -> SQL -> cited answer (refuses uncited)",
     )
@@ -695,6 +809,44 @@ def build_parser() -> argparse.ArgumentParser:
     rep.add_argument("--coverage-out", default=None,
                      help="write coverage_notes eval JSON here")
     rep.set_defaults(func=cmd_report)
+
+    rip = sub.add_parser(
+        "ripple",
+        help="deterministic retcon ripple report for proposed graph changes",
+    )
+    rip.add_argument("--world", required=True, help="world name (must be loaded)")
+    rip.add_argument("--db-url", default=None, help="Postgres URL (else CANON_DB_URL / DATABASE_URL)")
+    rip.add_argument("--json", action="store_true", help="emit reusable JSON instead of text")
+    rip.add_argument("--out", default=None, help="write output here")
+    rip_sub = rip.add_subparsers(dest="ripple_command", required=True)
+
+    move = rip_sub.add_parser("move", help="move an assertion's story-position lower bound")
+    move.add_argument("--assertion-id", type=int, default=None, help="assertion id to move")
+    move.add_argument("--subject", default=None, help="subject name if assertion-id is omitted")
+    move.add_argument("--predicate", default=None, help="predicate if assertion-id is omitted")
+    move.add_argument("--from-position", default=None, help="optional current position/scene ref to disambiguate")
+    move.add_argument("--to-position", required=True, help="new story position or scene ref")
+    move.set_defaults(func=cmd_ripple)
+
+    remove = rip_sub.add_parser("remove", help="remove an assertion from canon")
+    remove.add_argument("--assertion-id", type=int, default=None, help="assertion id to remove")
+    remove.add_argument("--subject", default=None, help="subject name if assertion-id is omitted")
+    remove.add_argument("--predicate", default=None, help="predicate if assertion-id is omitted")
+    remove.add_argument("--from-position", default=None, help="optional current position/scene ref to disambiguate")
+    remove.set_defaults(func=cmd_ripple)
+
+    cut = rip_sub.add_parser("cut-entity", help="cut an entity and show direct ripples")
+    cut.add_argument("--entity", required=True, help="entity name or alias")
+    cut.add_argument("--kind", default=None, help="optional entity kind disambiguator")
+    cut.set_defaults(func=cmd_ripple)
+
+    shift = rip_sub.add_parser("shift-event", help="move an event assertion found by subject and predicate")
+    shift.add_argument("--subject", required=True, help="event subject name")
+    shift.add_argument("--predicate", required=True, help="event predicate, e.g. dies")
+    shift.add_argument("--from-position", default=None, help="optional current position/scene ref to disambiguate")
+    shift.add_argument("--to-position", required=True, help="new story position or scene ref")
+    shift.add_argument("--assertion-id", type=int, default=None, help="optional explicit event assertion id")
+    shift.set_defaults(func=cmd_ripple)
     return p
 
 
