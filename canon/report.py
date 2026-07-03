@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import check
+from . import families as family_config
 from .extract import DEFAULT_EFFORT, DEFAULT_MODEL, first_text, quote_in_text
 
 FAMILIES = ("F1", "F2", "F3", "F4")
@@ -693,18 +694,23 @@ def collect_candidates(
     threshold: int | None = None,
     scene_open_questions: list[dict[str, Any]] | None = None,
     suppressed_note_keys: set[str] | None = None,
+    enabled_families: tuple[str, ...] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     suppressed_note_keys = suppressed_note_keys or set()
-    by_family = {
-        "F1": collect_open_question_candidates(
+    enabled = set(enabled_families or FAMILIES)
+    by_family: dict[str, list[dict[str, Any]]] = {}
+    if "F1" in enabled:
+        by_family["F1"] = collect_open_question_candidates(
             snapshot,
             threshold=threshold,
             scene_open_questions=scene_open_questions,
-        ),
-        "F2": collect_idle_setup_candidates(snapshot, threshold=threshold),
-        "F3": collect_dormant_knowledge_candidates(snapshot, threshold=threshold),
-        "F4": collect_unmotivated_turn_candidates(snapshot),
-    }
+        )
+    if "F2" in enabled:
+        by_family["F2"] = collect_idle_setup_candidates(snapshot, threshold=threshold)
+    if "F3" in enabled:
+        by_family["F3"] = collect_dormant_knowledge_candidates(snapshot, threshold=threshold)
+    if "F4" in enabled:
+        by_family["F4"] = collect_unmotivated_turn_candidates(snapshot)
     return {
         family: [c for c in rows if c["note_key"] not in suppressed_note_keys]
         for family, rows in by_family.items()
@@ -1078,17 +1084,20 @@ def generate_coverage_notes(
     threshold: int | None = None,
     scene_open_questions: list[dict[str, Any]] | None = None,
     suppressed_note_keys: set[str] | None = None,
+    enabled_families: tuple[str, ...] | None = None,
 ) -> tuple[list[dict[str, Any]], list[ReportLog], dict[str, list[dict[str, Any]]]]:
+    enabled_families = enabled_families or FAMILIES
     candidates_by_family = collect_candidates(
         snapshot,
         threshold=threshold,
         scene_open_questions=scene_open_questions,
         suppressed_note_keys=suppressed_note_keys,
+        enabled_families=enabled_families,
     )
     notes: list[dict[str, Any]] = []
     logs: list[ReportLog] = []
-    for family in FAMILIES:
-        candidates = candidates_by_family[family]
+    for family in enabled_families:
+        candidates = candidates_by_family.get(family, [])
         if use_llm:
             if client is None:
                 raise RuntimeError("Reader's Report LLM phrasing requires an Anthropic client; pass --no-llm for deterministic dry-run phrasing.")
@@ -1116,6 +1125,7 @@ def run_report_notes(
     run_id: uuid.UUID | None = None,
 ) -> tuple[list[dict[str, Any]], list[ReportLog], dict[str, list[dict[str, Any]]], dict[str, Any]]:
     suppressed = load_suppressed_note_keys(conn, world_id)
+    enabled_families = family_config.enabled_note_families(conn, world_id)
     snapshot = load_world_snapshot(conn, world_id)
     scene_open_questions = load_scene_open_questions(scene_open_questions_path, snapshot)
     notes, logs, candidates = generate_coverage_notes(
@@ -1127,10 +1137,11 @@ def run_report_notes(
         threshold=threshold,
         scene_open_questions=scene_open_questions,
         suppressed_note_keys=suppressed,
+        enabled_families=enabled_families,
     )
     notes = [n for n in notes if n["note_key"] not in suppressed]
     if persist:
-        persist_coverage_notes(conn, world_id, notes, run_id=run_id)
+        persist_coverage_notes(conn, world_id, notes, run_id=run_id, families=enabled_families)
     return notes, logs, candidates, snapshot
 
 

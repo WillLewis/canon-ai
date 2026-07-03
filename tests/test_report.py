@@ -167,6 +167,18 @@ def test_dismissed_note_key_suppresses_reloaded_candidate():
     assert candidates["F2"] == []
 
 
+def test_disabled_report_family_produces_no_candidates():
+    mara = _entity(1, "Mara Voss")
+    scene = _scene()
+    later = _scene(2, 20, "E104/sc1", "Later.")
+    assertion = _assertion(1, scene, mara)
+    snap = _snapshot([assertion], [scene, later], [mara])
+
+    candidates = report.collect_candidates(snap, threshold=1, enabled_families=("F1", "F3", "F4"))
+
+    assert "F2" not in candidates
+
+
 def test_f4_validator_drops_weak_language():
     mara = _entity(1, "Mara Voss")
     scene = _scene(raw="Mara takes the ledger.")

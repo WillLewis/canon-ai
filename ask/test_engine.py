@@ -29,7 +29,7 @@ def test_epistemic_at_scene_uses_interval_membership():
     assert plan is not None
     assert plan.intent == "epistemic"
     assert plan.params["story_position"] == 14
-    assert "a.valid_during @> :story_position" in plan.sql
+    assert "a.valid_during @> :story_position::int" in plan.sql
     assert "a.predicate IN ('knows')" in plan.sql
 
 
