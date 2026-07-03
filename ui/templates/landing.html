@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canon — continuity verification for serialized fiction</title>
+<meta name="description" content="Canon reads your script, builds a cited fact graph, and flags contradictions. It never writes a word of your story.">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  /* Page-scoped poster styles (P3-FRONTDOOR). Every color/face comes from the
+     DESIGN.md tokens with literal fallbacks, so this renders correctly whether
+     or not the shared token sheet has loaded. Red = caught-only. */
+  .ld-body{background:var(--paper,#F2EFE7);color:var(--ink,#181510);
+    font-family:var(--body,'Instrument Sans','Helvetica Neue',Helvetica,Arial,sans-serif);
+    font-size:16px;line-height:1.55;margin:0;min-height:100vh;
+    display:flex;flex-direction:column}
+  .ld-wrap{max-width:1200px;margin:0 auto;padding:0 40px;width:100%;box-sizing:border-box}
+  .ld-top{display:flex;justify-content:space-between;align-items:baseline;padding:26px 0 0}
+  .ld-brand{font-family:var(--evidence,'Courier Prime','Courier New',monospace);
+    font-size:14px;letter-spacing:.18em;text-transform:uppercase}
+  .ld-top a{color:var(--ink,#181510)}
+  .ld-hero{display:grid;grid-template-columns:5fr 7fr;gap:56px;align-items:center;
+    padding:72px 0 96px;flex:1}
+  .ld-hero h1{font-family:var(--display,Fraunces,Georgia,'Times New Roman',serif);
+    font-weight:600;font-size:clamp(40px,4.6vw,64px);line-height:1.04;
+    letter-spacing:-.015em;margin:0}
+  .ld-sub{margin-top:22px;font-size:17px;max-width:42ch}
+  .ld-sub em{font-style:normal;color:var(--graphite,#6F675A)}
+  .ld-cta{display:inline-block;margin-top:30px;background:var(--ink,#181510);
+    color:var(--page,#FBFAF4);font-weight:600;font-size:15px;padding:15px 26px;
+    border:none;border-radius:0;text-decoration:none;cursor:pointer}
+  .ld-cta:hover{background:#000}
+  .ld-covenant{margin-top:16px;font-family:var(--evidence,'Courier Prime','Courier New',monospace);
+    font-size:12px;color:var(--graphite,#6F675A)}
+  .ld-demolink{margin-top:10px;font-size:13.5px}
+  .ld-demolink a{color:var(--ink,#181510)}
+
+  /* --- the script-page hero: the document IS the hero ------------------- */
+  .ld-pagewrap{position:relative}
+  .ld-counter{position:absolute;top:-26px;right:6px;
+    font-family:var(--evidence,'Courier Prime','Courier New',monospace);
+    font-size:12px;letter-spacing:.08em;color:var(--graphite,#6F675A)}
+  .ld-counter b{color:var(--ink,#181510);font-weight:700}
+  .ld-scriptpage{position:relative;background:var(--page,#FBFAF4);
+    border:1px solid var(--hairline,#DDD7C9);box-shadow:0 1px 0 var(--hairline,#DDD7C9);
+    transform:rotate(.35deg);padding:56px 64px 48px 72px;overflow:hidden;
+    font-family:var(--evidence,'Courier Prime','Courier New',monospace);
+    font-size:14px;line-height:1.5}
+  .ld-pageno{position:absolute;top:18px;right:26px;font-size:12px;color:var(--graphite,#6F675A)}
+  .ld-slug{font-weight:700;text-transform:uppercase;margin-bottom:14px}
+  .ld-action{margin-bottom:14px;max-width:58ch}
+  .ld-char{text-align:center;text-transform:uppercase;margin:14px 0 2px}
+  .ld-dial{margin:0 auto;max-width:34ch}
+  .ld-caught{position:relative;display:block;margin:10px auto;max-width:36ch;padding:6px 10px}
+  .ld-caught .ld-char{margin-top:0}
+  .ld-circle{position:absolute;inset:-8px -14px;width:calc(100% + 28px);
+    height:calc(100% + 16px);pointer-events:none}
+  .ld-circle path{stroke:var(--redpencil,#C43B22);stroke-width:2.4;fill:none;
+    stroke-linecap:round;opacity:.9}
+  .ld-marginnote{position:absolute;right:-8px;top:100%;margin-top:10px;width:270px;
+    font-size:11.5px;line-height:1.45;color:var(--redpencil,#C43B22);transform:rotate(-.6deg)}
+
+  /* --- the one signature motion: rule descends, counter ticks, circle blooms */
+  .ld-redrule{position:absolute;left:0;right:0;top:0;height:2px;
+    background:var(--redpencil,#C43B22);opacity:0;pointer-events:none}
+  @media (prefers-reduced-motion: no-preference){
+    .ld-redrule{animation:ld-read 2.2s ease-out .4s 1 forwards}
+    .ld-circle path{stroke-dasharray:900;stroke-dashoffset:900;
+      animation:ld-bloom .9s ease-out 2.1s 1 forwards}
+    .ld-marginnote{opacity:0;animation:ld-note .5s ease-out 2.8s 1 forwards}
+    @keyframes ld-read{0%{opacity:.85;top:0}90%{opacity:.85}100%{top:calc(100% - 2px);opacity:0}}
+    @keyframes ld-bloom{to{stroke-dashoffset:0}}
+    @keyframes ld-note{to{opacity:1}}
+  }
+
+  .ld-foot{padding:28px 0 36px;border-top:1px solid var(--hairline,#DDD7C9);
+    font-family:var(--evidence,'Courier Prime','Courier New',monospace);
+    font-size:12px;color:var(--graphite,#6F675A);text-align:center}
+  @media (max-width:900px){
+    .ld-hero{grid-template-columns:1fr;padding-top:48px}
+    .ld-marginnote{position:static;width:auto;margin-top:14px}
+    .ld-wrap{padding:0 20px}
+  }
+</style>
+</head>
+<body class="ld-body">
+<div class="ld-wrap">
+  <div class="ld-top">
+    <span class="ld-brand">Canon · The Continuity Desk</span>
+    <a href="{{ demo_url }}">see a real report</a>
+  </div>
+
+  <section class="ld-hero">
+    <div>
+      <h1>This tool will never write a word of your story.</h1>
+      <p class="ld-sub">It reads it. All of it.
+        <em>— Canon: continuity verification for serialized fiction.
+        Every finding cited to its scene.</em></p>
+      <a class="ld-cta" href="/upload">Read my script — first script free</a>
+      <p class="ld-covenant">No generation. No training on your pages.
+        Every claim cited — or it doesn't ship.</p>
+      <p class="ld-demolink">Not ready?
+        <a href="{{ demo_url }}">See a real Reader's Report</a> first.</p>
+    </div>
+
+    <div class="ld-pagewrap">
+      <div class="ld-counter">FACTS LEARNED: <b id="ld-facts" data-count="148">148</b></div>
+      <div class="ld-scriptpage">
+        <span class="ld-redrule" aria-hidden="true"></span>
+        <div class="ld-pageno">14.</div>
+        <div class="ld-slug">INT. HARBORMASTER'S OFFICE — DAY</div>
+        <div class="ld-action">Mara shoulders the door. Files everywhere. The
+          ledger sits open where Tobias left it — where Tobias will never sit
+          again.</div>
+        <div class="ld-char">MARA</div>
+        <div class="ld-dial">You knew what the numbers were for.</div>
+        <span class="ld-caught">
+          <svg class="ld-circle" viewBox="0 0 320 74" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M14 38 C10 12, 92 4, 168 7 C258 10, 314 18, 310 38 C306 62, 224 71, 138 68 C56 66, 18 58, 14 40"/>
+          </svg>
+          <span class="ld-char">MARA</span>
+          <span class="ld-dial">(lighting a cigarette)<br>Some habits keep you honest.</span>
+          <span class="ld-marginnote">EP2/SC14 — Mara lights a cigarette.
+            She quit in EP1/SC3 (&ldquo;three weeks clean&rdquo;). Contradiction.</span>
+        </span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer class="ld-foot">
+  Canon never writes story · every claim cites its source.
+</footer>
+
+<script>
+  // The counter ticks once while the red rule reads the page. Reduced motion
+  // (or no JS) leaves the final number in place — the markup ships it.
+  (function () {
+    var el = document.getElementById("ld-facts");
+    if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var target = parseInt(el.dataset.count, 10) || 0, start = null;
+    el.textContent = "0";
+    function tick(ts) {
+      if (start === null) start = ts;
+      var p = Math.min((ts - start) / 2000, 1);
+      el.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    setTimeout(function () { requestAnimationFrame(tick); }, 400);
+  })();
+</script>
+</body>
+</html>

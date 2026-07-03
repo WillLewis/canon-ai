@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Canon · Reading {{ world.name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/static/frontdoor.css">
+<section class="fd-page fd-theater"
+         {% if run %}data-run-id="{{ run.id }}"{% endif %}
+         data-world-id="{{ world.id }}" data-can-edit="{{ 1 if can_edit else 0 }}">
+  <div class="fd-theater-head">
+    <h1 class="fd-title">Reading <span class="fd-mono">{{ world.name }}</span></h1>
+    <div class="fd-counterline">
+      <span class="fd-kicker">FACTS LEARNED</span>
+      <span id="th-facts" class="fd-count">{{ run.facts_total or 0 if run else 0 }}</span>
+    </div>
+  </div>
+  <p id="th-phase" class="fd-phase" data-phase="{{ run.phase if run else '' }}">
+    {% if run %}{{ run.phase }}{% else %}no run yet{% endif %}</p>
+
+  {% if not run %}
+  <p class="fd-lede">Nothing is running for this world.
+    <a href="/upload">Upload a script</a> to start one.</p>
+  {% endif %}
+
+  <!-- The first-finding card: hidden until a 'finding' event with first:true
+       arrives. Never promised in the narration — the ledger carries the wait;
+       this card is the delight when it fires. -->
+  <div id="th-first" class="fd-first" hidden>
+    <span class="fd-sev" id="th-first-sev"></span>
+    <p class="fd-first-summary" id="th-first-summary"></p>
+    <p class="fd-first-ev fd-mono" id="th-first-ev"></p>
+    <p class="fd-first-links" id="th-first-links"></p>
+  </div>
+
+  <ol id="th-ledger" class="fd-ledger" aria-live="polite"></ol>
+
+  <p id="th-done" class="fd-done" hidden></p>
+  <p id="th-error" class="fd-status fd-bad" hidden></p>
+  <p id="th-resume" hidden>
+    <button id="th-resume-btn" class="fd-btn">Resume the run</button>
+  </p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/theater.js"></script>
+{% endblock %}

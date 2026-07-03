@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Canon · Read my script{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/static/frontdoor.css">
+<section class="fd-page">
+  <h1 class="fd-title">Read my script</h1>
+  <p class="fd-lede">Canon reads every scene, builds a cited fact graph, and
+    flags what contradicts it. It never writes a word.</p>
+
+  <div id="fd-drop" class="fd-drop" tabindex="0">
+    <p class="fd-drop-line">Drop a script here, or
+      <label class="fd-browse">browse<input id="fd-file" type="file"
+        accept="{{ supported_exts|join(',') }}" hidden></label></p>
+    <p class="fd-drop-meta">{{ supported_exts|join(' · ') }}</p>
+  </div>
+
+  <p id="fd-status" class="fd-status" role="status"></p>
+
+  <p class="fd-trust">{{ trust_caption }}</p>
+
+  <div class="fd-limits">
+    <span class="fd-kicker">Free tier — honest limits</span>
+    <ul>
+      <li>{{ free_limits.scripts }} script per account, up to {{ max_pages }} pages</li>
+      <li>{{ free_limits.reports_per_day }} report runs a day</li>
+      <li>{{ free_limits.asks_per_hour }} questions an hour</li>
+      <li>Export or delete everything, any time — <a href="/legal/terms">terms &amp; trust</a></li>
+    </ul>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Raw-body upload (the repo avoids python-multipart): POST the file bytes
+  // with the filename in X-Canon-Filename, then follow to the theater.
+  (function () {
+    var drop = document.getElementById("fd-drop");
+    var input = document.getElementById("fd-file");
+    var status = document.getElementById("fd-status");
+
+    function say(msg, bad) {
+      status.textContent = msg;
+      status.classList.toggle("fd-bad", !!bad);
+    }
+
+    function send(file) {
+      if (!file) return;
+      say("Reading " + file.name + " …");
+      fetch("/api/uploads", {
+        method: "POST",
+        body: file,
+        headers: { "X-Canon-Filename": file.name },
+      }).then(function (r) {
+        return r.json().then(function (j) { return { ok: r.status === 202, status: r.status, body: j }; })
+          .catch(function () { return { ok: false, status: r.status, body: {} }; });
+      }).then(function (r) {
+        if (r.ok) { window.location = r.body.theater_url; return; }
+        if (r.status === 401) { say("Sign in first — the free tier needs an account (rate limits and your report hang off it).", true); return; }
+        say(r.body.detail || ("Upload failed (" + r.status + ")"), true);
+      }).catch(function () { say("Upload failed — network error.", true); });
+    }
+
+    input.addEventListener("change", function () { send(input.files[0]); });
+    ["dragover", "dragenter"].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("fd-over"); });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("fd-over"); });
+    });
+    drop.addEventListener("drop", function (e) {
+      send(e.dataTransfer.files && e.dataTransfer.files[0]);
+    });
+  })();
+</script>
+{% endblock %}
