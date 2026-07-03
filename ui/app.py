@@ -158,6 +158,34 @@ async def _on_error(request: Request, exc: Exception):
 # Routes
 # ---------------------------------------------------------------------------
 
+def _safe_next(next_path: str) -> str:
+    """Only same-app paths — never an open redirect."""
+    if (not next_path.startswith("/") or next_path.startswith("//")
+            or "://" in next_path):
+        return "/upload"
+    return next_path
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, next: str = "/upload"):
+    """Supabase-backed sign-in/sign-up (email magic link + Google OAuth).
+
+    The page mints the sb-access-token cookie ui/auth.py verifies. Already
+    signed in (including the AUTH_DISABLED dev bypass) -> straight to next.
+    """
+    dest = _safe_next(next)
+    if auth.peek_user(request):
+        return RedirectResponse(dest, status_code=303)
+    try:                       # login must render even without a database
+        worlds = db.list_worlds()
+    except Exception:
+        worlds = []
+    return _render(request, "login.html", None, worlds, nav="",
+                   next_path=dest,
+                   supabase_url=os.environ.get("SUPABASE_URL", ""),
+                   supabase_anon_key=os.environ.get("SUPABASE_ANON_KEY", ""))
+
+
 @app.get("/", response_class=HTMLResponse)
 def overview(request: Request, world: str | None = None):
     # P3-FRONTDOOR: anonymous visitors get the landing poster; signed-in users

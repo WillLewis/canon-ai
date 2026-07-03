@@ -166,6 +166,81 @@ def test_demo_world_env_override():
         assert client.get("/demo/report").status_code == 404
 
 
+# --- the sign-in door (/login + the upload gate) ----------------------------------
+
+import contextlib as _ctx
+
+
+@_ctx.contextmanager
+def _supabase_env(url, key):
+    saved = {k: os.environ.get(k) for k in ("SUPABASE_URL", "SUPABASE_ANON_KEY")}
+    try:
+        for k, v in (("SUPABASE_URL", url), ("SUPABASE_ANON_KEY", key)):
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_login_renders_setup_note_when_supabase_unconfigured():
+    with wired(auth_disabled=False) as client, _supabase_env(None, None):
+        r = client.get("/login")
+        assert r.status_code == 200
+        assert "Sign-in isn&#39;t configured" in r.text or "Sign-in isn't configured" in r.text
+        assert "supabase-js" not in r.text          # no CDN script without config
+
+
+def test_login_renders_google_and_email_when_configured():
+    with wired(auth_disabled=False) as client, \
+            _supabase_env("https://example.supabase.co", "anon-key"):
+        r = client.get("/login?next=/upload")
+        assert r.status_code == 200
+        assert "Continue with Google" in r.text
+        assert "Send sign-in link" in r.text
+        assert "supabase-js" in r.text
+        assert "sb-access-token" in r.text          # mints the cookie auth verifies
+
+
+def test_login_redirects_straight_through_when_already_signed_in():
+    with wired(auth_disabled=True) as client:
+        r = client.get("/login?next=/worlds/1/report")
+        assert r.status_code == 303
+        assert r.headers["location"] == "/worlds/1/report"
+
+
+def test_login_next_is_never_an_open_redirect():
+    with wired(auth_disabled=True) as client:
+        for evil in ("https://evil.example", "//evil.example", "javascript:alert(1)"):
+            r = client.get("/login", params={"next": evil})
+            assert r.status_code == 303
+            assert r.headers["location"] == "/upload"
+
+
+def test_upload_page_offers_signin_when_anonymous():
+    with wired(auth_disabled=False) as client:
+        r = client.get("/upload")
+        assert r.status_code == 200
+        assert "/login?next=/upload" in r.text
+        # The gate block is visible (not hidden) for anonymous visitors.
+        auth_div = r.text.split('id="fd-auth"', 1)[1].split(">", 1)[0]
+        assert "hidden" not in auth_div
+
+
+def test_upload_page_hides_signin_when_signed_in():
+    with wired(auth_disabled=True) as client:
+        r = client.get("/upload")
+        assert r.status_code == 200
+        auth_div = r.text.split('id="fd-auth"', 1)[1].split(">", 1)[0]
+        assert "hidden" in auth_div
+
+
 if __name__ == "__main__":
     import pytest
 

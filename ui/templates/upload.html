@@ -17,6 +17,12 @@
 
   <p id="fd-status" class="fd-status" role="status"></p>
 
+  <div id="fd-auth" class="fd-auth" {% if user %}hidden{% endif %}>
+    <p class="fd-auth-note">Reading a script needs an account — your report,
+      your rulings, and the free tier's limits all hang off it.</p>
+    <a class="fd-signin" href="/login?next=/upload">Sign in or create an account</a>
+  </div>
+
   <p class="fd-trust">{{ trust_caption }}</p>
 
   <div class="fd-limits">
@@ -57,7 +63,12 @@
           .catch(function () { return { ok: false, status: r.status, body: {} }; });
       }).then(function (r) {
         if (r.ok) { window.location = r.body.theater_url; return; }
-        if (r.status === 401) { say("Sign in first — the free tier needs an account (rate limits and your report hang off it).", true); return; }
+        if (r.status === 401) {
+          // Not an error — a next step. Neutral message + the sign-in door.
+          say("One more step: this needs an account.", false);
+          document.getElementById("fd-auth").hidden = false;
+          return;
+        }
         say(r.body.detail || ("Upload failed (" + r.status + ")"), true);
       }).catch(function () { say("Upload failed — network error.", true); });
     }

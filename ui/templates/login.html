@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Canon · Sign in{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/static/frontdoor.css">
+<section class="fd-page">
+  <h1 class="fd-title">Sign in</h1>
+  <p class="fd-lede">One account — your worlds, your rulings, your limits.
+    Free to create; the first script is on us.</p>
+
+  {% if supabase_url and supabase_anon_key %}
+  <div class="fd-auth" style="margin-top:24px">
+    <button id="fd-google" class="fd-signin" type="button">Continue with Google</button>
+
+    <p class="fd-login-or">or use email</p>
+    <form id="fd-email-form" class="fd-login-form">
+      <input id="fd-email" type="email" required placeholder="you@example.com"
+             autocomplete="email">
+      <button class="fd-signin" type="submit">Send sign-in link</button>
+    </form>
+    <p id="fd-login-status" class="fd-status" role="status"></p>
+  </div>
+  <p class="fd-trust">Your words never train a model. Export or delete
+    everything, any time. New here? Either button creates your account.</p>
+  {% else %}
+  <div class="fd-auth" style="margin-top:24px">
+    <p class="fd-auth-note"><strong>Sign-in isn't configured on this server.</strong>
+      Set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> in the
+      server environment (Supabase project → Settings → API), then reload.
+      Local development can run with <code>AUTH_DISABLED=1</code> instead.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if supabase_url and supabase_anon_key %}
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // Mint the session cookie the backend verifies (ui/auth.py reads
+  // sb-access-token). Access tokens expire ~1h; v1 has no silent refresh —
+  // an expired session simply lands back here via the 401 path.
+  (function () {
+    var sb = supabase.createClient({{ supabase_url|tojson }}, {{ supabase_anon_key|tojson }});
+    var dest = {{ next_path|tojson }};
+    var status = document.getElementById("fd-login-status");
+
+    function finish(session) {
+      if (!session || !session.access_token) return;
+      document.cookie = "sb-access-token=" + session.access_token +
+        "; path=/; SameSite=Lax" +
+        (location.protocol === "https:" ? "; Secure" : "");
+      location.replace(dest);
+    }
+
+    sb.auth.getSession().then(function (r) { finish(r.data && r.data.session); });
+    sb.auth.onAuthStateChange(function (_e, session) { finish(session); });
+
+    document.getElementById("fd-google").addEventListener("click", function () {
+      sb.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: location.href },
+      });
+    });
+
+    document.getElementById("fd-email-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = document.getElementById("fd-email").value.trim();
+      if (!email) return;
+      sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.href } })
+        .then(function (r) {
+          status.textContent = r.error
+            ? ("Couldn't send the link: " + r.error.message)
+            : "Check your email — the sign-in link lands you back here.";
+        });
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

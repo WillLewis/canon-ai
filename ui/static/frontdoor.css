@@ -21,8 +21,24 @@
 .fd-drop-meta { font-family: var(--evidence, 'Courier Prime', monospace);
   font-size: 12px; color: var(--graphite, #6F675A); margin: 10px 0 0; }
 .fd-status { min-height: 1.4em; margin-top: 14px; }
-.fd-bad { color: var(--critical, #A81F11); }
+/* Errors are bold ink, never red — red is reserved for things Canon caught. */
+.fd-bad { color: var(--ink, #181510); font-weight: 600; }
 .fd-trust { font-size: 12px; color: var(--graphite, #6F675A); margin-top: 18px; }
+
+/* account gate (upload) + login page */
+.fd-auth { margin-top: 18px; border: 1px solid var(--hairline, #DDD7C9);
+  background: var(--page, #FBFAF4); padding: 16px 18px; }
+.fd-auth-note { margin: 0 0 12px; font-size: 14px; color: var(--graphite, #6F675A); }
+.fd-signin { display: inline-block; background: var(--ink, #181510);
+  color: var(--page, #FBFAF4); font-weight: 600; font-size: 14px;
+  padding: 11px 20px; text-decoration: none; }
+.fd-signin:hover { background: #000; color: var(--page, #FBFAF4); }
+.fd-login-form { margin-top: 16px; display: flex; gap: 8px; max-width: 420px; }
+.fd-login-form input[type="email"] { flex: 1; border: 1px solid var(--hairline, #DDD7C9);
+  background: var(--page, #FBFAF4); padding: 10px 12px; font: inherit; }
+.fd-login-or { margin: 18px 0 6px; font-family: var(--evidence, 'Courier Prime', monospace);
+  font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--graphite, #6F675A); }
 .fd-limits { margin-top: 22px; border-top: 1px solid var(--hairline, #DDD7C9);
   padding-top: 14px; font-size: 14px; }
 .fd-limits ul { margin: 8px 0 0; padding-left: 18px; }
