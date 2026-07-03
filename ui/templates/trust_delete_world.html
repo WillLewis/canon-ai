@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{# World-delete confirmation (P3-TRUST). Export is offered FIRST — leaving must
+   be as easy as arriving — then the typed-name confirmation form. #}
+{% block title %}Delete {{ world.name }} · Canon AI{% endblock %}
+{% block foottag %}Delete a world — export first; gone means gone.{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Delete “{{ world.name }}” <span class="sub-inline">— everything, permanently</span></h1>
+  <p class="sub">This removes every scene, entity, assertion, finding, seal, note, and
+    share link of this world from the live product. There is no undo and no soft delete.</p>
+</div>
+
+{% if error %}
+<section class="panel" id="delete-error">
+  <p><strong>{{ error }}</strong></p>
+</section>
+{% endif %}
+
+<section class="panel" id="export-first">
+  <h2>First: download everything before you go</h2>
+  <p>Your material and your rulings are yours. Take a complete copy — every stored row
+    plus the rendered bible and Reader's Report — before deleting anything.</p>
+  <p><a class="btn-note" id="export-before-delete"
+        href="/worlds/{{ world.id }}/export.zip">Download everything ({{ world.name }}.zip)</a></p>
+</section>
+
+<section class="panel" id="confirm-delete">
+  <h2>Then: confirm by typing the world's exact name</h2>
+  <p class="muted">Type <strong>{{ world.name }}</strong> to confirm. Anything else deletes nothing.</p>
+  <form method="post" action="/worlds/{{ world.id }}/delete" class="act">
+    <input type="text" name="confirm" autocomplete="off" spellcheck="false"
+           placeholder="{{ world.name }}" aria-label="world name confirmation">
+    <button type="submit" class="btn-note btn-reject">Delete this world forever</button>
+  </form>
+</section>
+
+{% endblock %}

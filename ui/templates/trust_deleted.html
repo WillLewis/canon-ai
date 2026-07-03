@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{# Deletion summary (P3-TRUST): exactly what left the database, per table.
+   Deterministic counts from canon/trust_delete.py — receipts, even for goodbye. #}
+{% block title %}Deleted · Canon AI{% endblock %}
+{% block foottag %}Deleted — gone means gone.{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Deleted <span class="sub-inline">— {{ kind }} “{{ name }}”</span></h1>
+  <p class="sub">{{ total }} row{{ 's' if total != 1 }} removed from the live product.
+    Hard-deleted, not hidden: nothing here can be restored from inside the product.</p>
+</div>
+
+<section class="panel" id="deleted-counts">
+  <h2>What was removed</h2>
+  <table class="grid">
+    <thead><tr><th>table</th><th class="num">rows deleted</th></tr></thead>
+    <tbody>
+      {% for label, n in rows %}
+      <tr><td>{{ label }}</td><td class="num">{{ n }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted small">Transient copies in short-lived infrastructure backups expire on
+    the provider's standard schedule and are never restored into the product
+    (<a href="/legal/terms#deletion-guarantee">deletion guarantee</a>).</p>
+</section>
+
+{% endblock %}
