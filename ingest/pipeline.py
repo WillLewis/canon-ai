@@ -10,7 +10,7 @@ from pathlib import Path
 from .fountain import parse_fountain
 from .models import ParsedWork, SceneRecord
 
-SCRIPT_EXTS = (".fountain", ".pdf", ".docx")
+SCRIPT_EXTS = (".fountain", ".fdx", ".pdf", ".docx")
 
 
 def expand_inputs(paths: list[str]) -> list[str]:
@@ -40,6 +40,10 @@ def parse_one(
     ext = Path(path).suffix.lower()
     if ext == ".fountain":
         return parse_fountain(Path(path).read_text(encoding="utf-8"), source_file=path)
+    if ext == ".fdx":
+        from .fdx import parse_fdx
+
+        return parse_fdx(path)
     if ext == ".pdf":
         from .documents import parse_pdf
 
