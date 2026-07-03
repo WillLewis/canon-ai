@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Canon · Triage Workbench{% endblock %}</title>
+  <title>{% block title %}Canon · The Continuity Desk{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
 <header class="topbar">
-  <div class="brand">{% if share_mode %}Canon{% else %}<a href="/{% if world %}?world={{ world.name|urlencode }}{% endif %}">Canon<span class="dot">·</span>Workbench</a>{% endif %}</div>
+  <div class="brand">{% if share_mode %}Canon{% else %}<a href="/{% if world %}?world={{ world.name|urlencode }}{% endif %}">Canon</a>{% endif %}</div>
   {% if world and not share_mode %}
+  {# Writer-first nav. Bible = the entities view (assertions are reachable
+     from within it); Findings lives inside the Report page. #}
   <nav class="mainnav">
     <a href="/worlds/{{ world.id }}/report" class="{{ 'on' if nav=='report' }}">Report</a>
     <a href="/worlds/{{ world.id }}/script" class="{{ 'on' if nav=='script' }}">Script</a>
+    <a href="/worlds/{{ world.id }}/confirm" class="{{ 'on' if nav=='confirm' }}">Verify{% if draft_count %} ({{ draft_count }}){% endif %}</a>
     <a href="/worlds/{{ world.id }}/rules" class="{{ 'on' if nav=='rules' }}">Rules</a>
-    <a href="/?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='overview' }}">Overview</a>
-    <a href="/entities?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='entities' }}">Entities</a>
-    <a href="/assertions?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='assertions' }}">Assertions</a>
+    <a href="/entities?world={{ world.name|urlencode }}" class="{{ 'on' if nav in ('entities', 'assertions') }}">Bible</a>
     <a href="/scenes?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='scenes' }}">Scenes</a>
-    <a href="/findings?world={{ world.name|urlencode }}" class="{{ 'on' if nav=='findings' }}">Findings</a>
   </nav>
   <form class="worldpick" method="get" action="{{ request.url.path }}">
     <label>world</label>

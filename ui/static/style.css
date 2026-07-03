@@ -93,7 +93,7 @@ button, input, select, textarea { font-family: var(--body); }
 .mainnav a:hover { color: var(--ink); text-decoration: none; }
 .mainnav a.on { color: var(--ink); border-bottom-color: var(--ink); }
 .mainnav.plan { margin-right: 0; margin-left: auto; }
-.topbar .mainnav + .worldpick + .mainnav.plan { margin-left: 0; }
+.mainnav + .worldpick ~ .mainnav.plan, .mainnav ~ .mainnav.plan { margin-left: 0; }
 .worldpick {
   display: flex; align-items: center; gap: 7px; color: var(--graphite);
   font-family: var(--evidence); font-size: 11px; text-transform: uppercase;
