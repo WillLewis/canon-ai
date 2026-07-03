@@ -126,7 +126,10 @@ def test_authenticated_root_keeps_the_overview():
         r = client.get("/")
         assert r.status_code == 200
         assert "This tool will never write a word" not in r.text
-        assert "Workbench" in r.text                          # the workbench chrome
+        # The app chrome, not the poster: nav + the overview's Works section.
+        # (P3-POLISH renamed the brand — "Workbench" no longer renders anywhere.)
+        assert 'class="mainnav"' in r.text
+        assert "Works" in r.text
 
 
 # --- the logged-out demo report ---------------------------------------------------------
