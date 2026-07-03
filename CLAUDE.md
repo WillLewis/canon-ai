@@ -27,6 +27,7 @@ Corollary: every flag, answer, or finding **must cite its source** (episode/scen
 - `db/schema.sql` — DDL: tables, ranges, exclusion constraints, indexes.
 - `db/checks.sql` — MVP continuity checks as SQL, with severity and explanation.
 - `fixtures/greyharbor/` — original 2-episode test show with **planted continuity errors** + `answer-key.md`. This is the grading harness for Phase 0.
+- `corpus/` — provenance metadata only for rights-held third-party material; no script text. Purchased FBI script public-display rights remain unverified, internal smoke-test only.
 
 ## Working conventions
 
