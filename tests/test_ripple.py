@@ -5,7 +5,6 @@ it should exercise the same ranges, scene_presence rows, findings, and family
 toggle table the CLI uses.
 """
 
-import os
 import pathlib
 import sys
 
@@ -14,18 +13,14 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from canon import check, families, ingest, report, ripple, store  # noqa: E402
+from db_gate import require_migrated_db  # noqa: E402
 from greyharbor_golden import golden_state  # noqa: E402
 
 CHECKS_SQL = (ROOT / "db" / "checks.sql").read_text(encoding="utf-8")
 
 
 def _db_conn():
-    url = os.environ.get("CANON_DB_URL") or "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
-    try:
-        import psycopg
-        return psycopg.connect(url, connect_timeout=2)
-    except Exception:
-        return None
+    return require_migrated_db()
 
 
 def _load_world(conn, world):
@@ -63,9 +58,6 @@ def test_render_text_handles_empty_report():
 
 def test_integration_ripple_move_death_and_family_toggles():
     conn = _db_conn()
-    if conn is None:
-        print("  (skipped: no database reachable)")
-        return
 
     world = "greyharbor_ripple_pytest"
     try:

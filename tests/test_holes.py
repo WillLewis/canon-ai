@@ -8,7 +8,6 @@ the expected gap categories. Skipped unless a database is reachable.
     python tests/test_holes.py
 """
 
-import os
 import pathlib
 import sys
 
@@ -17,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from canon import holes  # noqa: E402
+from db_gate import require_migrated_db  # noqa: E402
 
 HOLES_SQL = (ROOT / "db" / "holes.sql").read_text(encoding="utf-8")
 
@@ -76,19 +76,11 @@ def test_render_html_empty_state():
 # --- integration -----------------------------------------------------------
 
 def _db_conn():
-    url = os.environ.get("CANON_DB_URL") or "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
-    try:
-        import psycopg
-        return psycopg.connect(url, connect_timeout=2)
-    except Exception:
-        return None
+    return require_migrated_db()
 
 
 def test_integration_holes_over_greyharbor():
     conn = _db_conn()
-    if conn is None:
-        print("  (skipped: no database reachable)")
-        return
 
     from canon import ingest, store
     from greyharbor_golden import golden_state
