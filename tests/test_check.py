@@ -13,7 +13,6 @@ reachable (CANON_DB_URL, or the local docker default).
 
 import importlib.util
 import json
-import os
 import pathlib
 import re
 import sys
@@ -23,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from canon import check  # noqa: E402
+from db_gate import require_migrated_db  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("run_eval", ROOT / "eval" / "run_eval.py")
 run_eval = importlib.util.module_from_spec(_spec)
@@ -123,19 +123,11 @@ def test_to_findings_json_and_report():
 # --- integration: real DB --------------------------------------------------
 
 def _db_conn():
-    url = os.environ.get("CANON_DB_URL") or "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
-    try:
-        import psycopg
-        return psycopg.connect(url, connect_timeout=2)
-    except Exception:
-        return None
+    return require_migrated_db()
 
 
 def test_integration_pipeline_passes_phase0_findings_gates():
     conn = _db_conn()
-    if conn is None:
-        print("  (skipped: no database reachable)")
-        return
 
     from canon import ingest, resolve, store
     from greyharbor_golden import golden_state

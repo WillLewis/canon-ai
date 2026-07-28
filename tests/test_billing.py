@@ -92,6 +92,10 @@ def cursor_with_sub(status, period_end, tier=None):
     return cur
 
 
+def future_period_end():
+    return datetime.now(timezone.utc) + timedelta(days=12)
+
+
 @contextlib.contextmanager
 def env(**pairs):
     saved = {k: os.environ.get(k) for k in pairs}
@@ -379,7 +383,7 @@ def test_resolve_tier_db_error_fails_to_free_with_alert():
 
 
 def test_make_tier_resolver_plugs_into_middleware_shape():
-    cur = cursor_with_sub("active", NOW + timedelta(days=12))
+    cur = cursor_with_sub("active", future_period_end())
     with env(CANON_FORCE_TIER=None):
         resolver = store.make_tier_resolver(lambda: cur)
         assert resolver(SimpleNamespace(id=UID)) == "paid"
@@ -590,7 +594,7 @@ def test_pricing_page_shows_current_tier_and_upgrade_for_free_user():
 
 def test_pricing_page_shows_manage_billing_for_paid_user():
     user = auth.User(id=UID, email="writer@example.com")
-    cur = cursor_with_sub("active", NOW + timedelta(days=12))
+    cur = cursor_with_sub("active", future_period_end())
     with client_for(cur, peek=lambda request: user) as client:
         r = client.get("/billing")
     body = r.text

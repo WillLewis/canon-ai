@@ -14,7 +14,6 @@ is measured separately once a key is present.
 """
 
 import json
-import os
 import pathlib
 import sys
 
@@ -23,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from canon import ask  # noqa: E402
+from db_gate import require_migrated_db  # noqa: E402
 
 
 # --- offline: guard ---------------------------------------------------------
@@ -252,19 +252,11 @@ QUESTIONS = [
 
 
 def _db_conn():
-    url = os.environ.get("CANON_DB_URL") or "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
-    try:
-        import psycopg
-        return psycopg.connect(url, connect_timeout=2)
-    except Exception:
-        return None
+    return require_migrated_db()
 
 
 def test_integration_scripted_questions_all_cited():
     conn = _db_conn()
-    if conn is None:
-        print("  (skipped: no database reachable)")
-        return
 
     from canon import ingest, store
     from greyharbor_golden import golden_state

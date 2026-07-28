@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import sys
 
@@ -10,6 +9,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from ask import engine
+from db_gate import require_migrated_db
 
 
 QUESTIONS = json.loads((Path(__file__).with_name("greyharbor_questions.json")).read_text())
@@ -104,29 +104,14 @@ def test_answer_renders_cited_rows():
 
 
 def _db_conn():
-    urls = [
-        os.environ.get("CANON_DB_URL"),
-        os.environ.get("DATABASE_URL"),
-        "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
-        "postgresql://postgres:postgres@127.0.0.1:5432/postgres",
-    ]
-    try:
-        import psycopg
-    except Exception:
-        return None
-    for url in [u for u in urls if u]:
-        try:
-            return psycopg.connect(url, connect_timeout=2)
-        except Exception:
-            continue
-    return None
+    return require_migrated_db(
+        include_database_url=True,
+        include_supabase_default=True,
+    )
 
 
 def test_integration_greyharbor_scripted_questions_db_gated():
     conn = _db_conn()
-    if conn is None:
-        print("  (skipped: no database reachable)")
-        return
 
     from canon import ingest, store
     from greyharbor_golden import golden_state
