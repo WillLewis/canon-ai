@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Share link · {{ world.name if world else 'Canon' }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Share link created</h1>
+  <p class="sub">Anyone with this link can view the {{ kind }} — read-only, every claim
+    still cites its scene. Nothing is shareable by default; this link exists because
+    you created it.</p>
+</div>
+
+<section class="panel" id="share-link">
+  <p class="share-url"><a href="{{ share_url }}">{{ share_url }}</a></p>
+  <form method="post" action="/worlds/{{ world.id }}/share/revoke" class="act">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit" title="permanent — a revoked token never resolves again; mint a new link instead">Revoke this link</button>
+  </form>
+  <p class="muted small">Revocation is permanent: a revoked token never resolves again.</p>
+</section>
+
+{% endblock %}

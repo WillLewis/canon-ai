@@ -45,7 +45,7 @@
     <li>
       {{ m.severity_badge(f.severity) }}
       <a href="/findings/{{ f.id }}{{ m.wq() }}">{{ f.check_name }}</a>
-      {% if f.sealed %}<span class="badge status-sealed">sealed</span>{% endif %}
+      {% if f.sealed %}<span class="badge status-sealed" title="Stet — let it stand. Writer marked intentional.">stet</span>{% endif %}
     </li>
     {% endfor %}
   </ul>

@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% import "_macros.html" as m with context %}
-{% block title %}Entities · {{ world.name }}{% endblock %}
+{% block title %}Bible · {{ world.name }}{% endblock %}
 {% block content %}
 
 <div class="page-head">
-  <h1>Entities <span class="count">{{ entities|length }}</span></h1>
+  <h1>Bible <span class="count">{{ entities|length }} entities</span></h1>
+  <p class="sub">Every entity Canon tracks, with its dossier and citations.
+    <a href="/assertions{{ m.wq() }}">All assertions →</a></p>
 </div>
 
 <form class="filters" method="get" action="/entities">

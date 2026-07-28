@@ -16,7 +16,10 @@ This module issues SELECTs only, except `seal_finding` / `unseal_finding`, which
 write the `seals` table exactly as the checker reads it (the same
 `(check_name, assertion_a, coalesce(assertion_b,0))` key used in canon/check.py)
 and mirror the result onto `findings.sealed` so a re-check is not required to see
-the change.
+the change — and `set_note_status`, the note surface's one write: the permanent
+open -> sealed/dismissed transition on `coverage_notes`, with attribution — and
+`rule_assertion`, the confirm queue's one write: the guarded draft -> canon/
+rejected transition, audited via ops.metering.
 """
 
 from __future__ import annotations
@@ -32,6 +35,14 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from canon.ingest import connect, resolve_db_url  # noqa: E402  (read-only import)
+from ops import metering  # noqa: E402  (confirm-queue audit rows; never edited here)
+
+# Audit rows for confirm-queue rulings are zero-token, so their cost is 0 with
+# any model — but record_usage suffixes the kind with ':unpriced' when the
+# model is unknown, which would make 'confirm_ruling' rows un-greppable. Pass a
+# priced model id to keep the kind clean; usage_events stores no model column,
+# so nothing false is recorded.
+_AUDIT_MODEL = next(iter(metering.PRICING))
 
 # The loaded dev world lives here (task brief); env vars still win via resolve_db_url.
 DEFAULT_LOCAL_URL = "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
@@ -94,6 +105,26 @@ def list_worlds() -> list[dict]:
 def get_world(name: str) -> dict | None:
     with db_conn() as conn:
         return _one(conn, "select id, name from worlds where name = %(n)s", {"n": name})
+
+
+def get_world_by_id(world_id: int) -> dict | None:
+    with db_conn() as conn:
+        return _one(conn, "select id, name from worlds where id = %(id)s", {"id": world_id})
+
+
+def member_role(world_id: int, user_id: str) -> str | None:
+    """The user's role on a world: worlds.owner_id counts as 'owner', otherwise
+    the world_members row (mirrors the canon_world_role() SQL helper the RLS
+    policies use, so the app and the database agree on who may do what)."""
+    with db_conn() as conn:
+        row = _one(conn, """
+            select coalesce(
+              (select 'owner' from worlds w
+                 where w.id = %(w)s and w.owner_id = %(u)s::uuid),
+              (select m.role from world_members m
+                 where m.world_id = %(w)s and m.user_id = %(u)s::uuid)) as role
+        """, {"w": world_id, "u": user_id})
+    return row["role"] if row else None
 
 
 def world_summary(world_id: int) -> dict:
@@ -287,6 +318,85 @@ def get_assertion(world_id: int, assertion_id: int) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# Confirm queue (P3-CONFIRM): drafts are the queue. canon/store.py loads every
+# assertion below the confidence gate (0.85) as status 'draft'; the queue view
+# lists them and the writer's ruling settles each one — 'canon' or 'rejected'.
+# ---------------------------------------------------------------------------
+
+# ruling status -> the usage_events audit kind recorded for it.
+ASSERTION_RULINGS = {"canon": "confirm_ruling", "rejected": "reject_ruling"}
+
+
+def list_draft_assertions(world_id: int) -> list[dict]:
+    """The confirm queue: every 'draft' assertion, most-confident first, with
+    the same projection the assertion views use (quote + scene included)."""
+    with db_conn() as conn:
+        return _all(conn, _ASSERTION_SELECT + """
+            where a.world_id = %(w)s and a.status = 'draft'
+            order by a.confidence desc, a.id
+        """, {"w": world_id})
+
+
+def count_drafts(world_id: int) -> int:
+    """How many drafts await a ruling — the report view's 'Verify your canon (N)' pill."""
+    with db_conn() as conn:
+        row = _one(conn, """
+            select count(*) n from assertions
+            where world_id = %(w)s and status = 'draft'
+        """, {"w": world_id})
+    return row["n"] if row else 0
+
+
+def last_story_position(world_id: int) -> int | None:
+    """The corpus's last story position — the empty queue's 'clean through scene X'."""
+    with db_conn() as conn:
+        row = _one(conn, """
+            select max(s.story_position) p
+            from scenes s join works wk on wk.id = s.work_id
+            where wk.world_id = %(w)s
+        """, {"w": world_id})
+    return row["p"] if row else None
+
+
+def rule_assertion(world_id: int, assertion_id: int, status: str,
+                   ruled_by: str | None = None) -> bool:
+    """Confirm or reject one draft assertion — the confirm queue's only write.
+
+    The WHERE guards status='draft', so rulings are idempotent and can never
+    flip a settled row (canon, rejected, retconned). Confirming also sets
+    confirmed_by_human, matching canon.store.status_for's confirmed -> canon
+    promotion. Attribution lands on the row itself: confirmed_by/confirmed_at
+    (20260703100000_queued_ddl_and_attribution.sql) record who ruled and when,
+    for confirm and reject alike. Each applied ruling still writes a
+    usage_events audit row (kind per ASSERTION_RULINGS, zero tokens, user +
+    world attributed) — those rows double as launch analytics.
+    """
+    if status not in ASSERTION_RULINGS:
+        raise ValueError(
+            f"status must be one of {sorted(ASSERTION_RULINGS)}, got {status!r}")
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            update assertions
+               set status = %(s)s,
+                   confirmed_by_human = confirmed_by_human or %(confirm)s,
+                   confirmed_by = %(by)s::uuid,
+                   confirmed_at = now()
+             where id = %(id)s and world_id = %(w)s and status = 'draft'
+             returning id
+        """, {"s": status, "confirm": status == "canon", "by": ruled_by,
+              "id": assertion_id, "w": world_id})
+        changed = cur.fetchone() is not None
+        if changed:
+            metering.record_usage(
+                cur, user_id=ruled_by, world_id=world_id,
+                kind=ASSERTION_RULINGS[status],
+                tokens_in=0, tokens_out=0, model=_AUDIT_MODEL)
+        conn.commit()
+    return changed
+
+
+# ---------------------------------------------------------------------------
 # Scenes
 # ---------------------------------------------------------------------------
 
@@ -359,6 +469,95 @@ def list_findings(world_id: int) -> list[dict]:
         """, {"w": world_id})
 
 
+# --- writer-authored rules composed into the findings views (P3-WIRING) -----
+
+_RULE_FINDING_DEFAULTS = {
+    "id": None, "scene_slug": None, "story_position": None,
+    "episode_title": None, "subject_a": None, "subject_b": None,
+    "sealed": False, "assertion_a": None, "assertion_b": None, "scene_id": None,
+}
+
+
+def rules_conn():
+    """Tuple-row connection for canon.rules composition (module-level seam so
+    tests can fake it). None when no database is reachable — the findings
+    views then render the plain checker rows unchanged."""
+    try:
+        return connect(db_url())
+    except Exception:
+        return None
+
+
+def _is_undefined_table(exc: Exception) -> bool:
+    """True for Postgres 42P01 (undefined_table) from psycopg 2 or 3."""
+    code = getattr(exc, "sqlstate", None) or getattr(exc, "pgcode", None)
+    return code == "42P01"
+
+
+def _normalized_finding(f: dict) -> dict:
+    """Rule findings arrive keyed 'check' (canon/check.py shape); give them the
+    ui/db.list_findings column names so every template renders them alike."""
+    if "check_name" in f:
+        return f
+    out = _RULE_FINDING_DEFAULTS | dict(f)
+    out["check_name"] = out.pop("check", None)
+    return out
+
+
+def list_findings_composed(world_id: int) -> list[dict]:
+    """Findings for the report/findings/script views with the world's
+    writer-authored rules composed in (canon.rules.compose_findings): enabled
+    CANNOT/ONLY rules contribute findings, EXCEPTION rules filter them.
+
+    Feature-detected: the world_rules table lands with Wave 5's schema sync,
+    so on an undefined-table error — or with no database reachable at all —
+    the plain findings return unchanged, silently. Any other composition
+    failure also falls back to plain findings (a broken rules pass must never
+    take the report down), but is logged.
+    """
+    rows = list_findings(world_id)
+    conn = rules_conn()
+    if conn is None:
+        return rows
+    try:
+        from canon import rules as rules_engine  # no LLM in there (grep-guarded)
+
+        composed = rules_engine.compose_findings(conn.cursor(), world_id, rows)
+    except Exception as exc:
+        if not _is_undefined_table(exc):
+            import logging
+
+            logging.getLogger("canon.ui").warning(
+                "rule composition failed; rendering plain findings: %r", exc)
+        return rows
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return [_normalized_finding(f) for f in composed]
+
+
+# --- ops / billing cursor (P3-WIRING): the rate-limit guard's store ----------
+
+_OPS_CONN = None
+
+
+def ops_cursor():
+    """A plain cursor over the ops/billing tables (usage_events,
+    billing_subscriptions) for ops.middleware.rate_limited and
+    billing.store.make_tier_resolver. One lazily-opened autocommit connection,
+    reused across requests: the guard only reads, and record_action's insert
+    must commit immediately. Failure handling belongs to the callers — the
+    middleware fails open, billing resolves to 'free' — so this raises freely."""
+    global _OPS_CONN
+    if _OPS_CONN is None or getattr(_OPS_CONN, "closed", False):
+        conn = connect(db_url())
+        conn.autocommit = True
+        _OPS_CONN = conn
+    return _OPS_CONN.cursor()
+
+
 def _finding_assertion(conn, world_id: int, assertion_id: int | None) -> dict | None:
     if assertion_id is None:
         return None
@@ -398,13 +597,17 @@ def get_finding(world_id: int, finding_id: int) -> dict | None:
     return f
 
 
-def seal_finding(world_id: int, finding_id: int, reason: str) -> bool:
+def seal_finding(world_id: int, finding_id: int, reason: str,
+                 ruled_by: str | None = None) -> bool:
     """Insert a seal for the finding and mirror it onto findings.sealed.
 
     Writes the `seals` table on the exact key the checker reads
     (canon/check.py: (check_name, assertion_a, coalesce(assertion_b, 0))). The
     matching `findings.sealed` update means the UI reflects the seal without
     re-running `canon check`; a real re-check would compute the same flag.
+
+    ruled_by (an auth.users uuid) records who made the ruling; ruled_at is
+    stamped in SQL. Both columns arrive with the identity_and_access migration.
     """
     with db_conn() as conn:
         cur = conn.cursor()
@@ -423,9 +626,10 @@ def seal_finding(world_id: int, finding_id: int, reason: str) -> bool:
               and assertion_a = %(a)s and coalesce_b = coalesce(%(b)s, 0)
         """, key)
         cur.execute("""
-            insert into seals (world_id, check_name, assertion_a, assertion_b, reason)
-            values (%(w)s, %(c)s, %(a)s, %(b)s, %(reason)s)
-        """, key | {"reason": (reason or "").strip() or None})
+            insert into seals (world_id, check_name, assertion_a, assertion_b,
+                               reason, ruled_by, ruled_at)
+            values (%(w)s, %(c)s, %(a)s, %(b)s, %(reason)s, %(ruled_by)s::uuid, now())
+        """, key | {"reason": (reason or "").strip() or None, "ruled_by": ruled_by})
         cur.execute(f"""
             update findings set sealed = true
             where world_id = %(w)s and check_name = %(c)s and assertion_a = %(a)s
@@ -433,6 +637,266 @@ def seal_finding(world_id: int, finding_id: int, reason: str) -> bool:
         """, key)
         conn.commit()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Note surface (P3-SURFACE): coverage notes, load-bearing canon, script text,
+# and the ask pane. Reads everywhere; the only writes are the two permanent
+# status transitions on coverage_notes (open -> sealed | dismissed).
+# ---------------------------------------------------------------------------
+
+NOTE_TERMINAL_STATUSES = ("sealed", "dismissed")
+
+
+def list_coverage_notes(world_id: int) -> list[dict]:
+    """Every coverage note for the world, newest-run data included.
+
+    Rows carry the whole lifecycle (status, first/last_seen_run, resolved_at,
+    status_changed_by/at) so the report, footer, and draft-2 diff all render
+    from one query. `evidence` is jsonb and arrives as a dict.
+    """
+    with db_conn() as conn:
+        return _all(conn, """
+            select id::text as id, note_key, family, summary, body, evidence,
+                   salience, status,
+                   first_seen_run::text as first_seen_run,
+                   last_seen_run::text  as last_seen_run,
+                   resolved_at,
+                   status_changed_by::text as status_changed_by,
+                   status_changed_at,
+                   created_at, updated_at
+            from coverage_notes
+            where world_id = %(w)s
+            order by family, salience desc, note_key
+        """, {"w": world_id})
+
+
+def set_note_status(world_id: int, note_id: str, status: str,
+                    changed_by: str | None = None) -> bool:
+    """Seal or dismiss a coverage note — permanently.
+
+    The WHERE clause enforces the product law from docs/readers-report.md: only
+    an *open* note can transition, and nothing here (or anywhere in ui/) can
+    re-open a sealed/dismissed note. Attribution goes to the identity columns
+    added by the identity_and_access migration.
+    """
+    if status not in NOTE_TERMINAL_STATUSES:
+        raise ValueError(f"status must be one of {NOTE_TERMINAL_STATUSES}, got {status!r}")
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            update coverage_notes
+               set status = %(s)s,
+                   status_changed_by = %(u)s::uuid,
+                   status_changed_at = now(),
+                   updated_at = now()
+             where id = %(id)s::uuid and world_id = %(w)s and status = 'open'
+             returning id
+        """, {"s": status, "u": changed_by, "id": note_id, "w": world_id})
+        changed = cur.fetchone() is not None
+        conn.commit()
+    return changed
+
+
+def load_bearing(world_id: int, limit: int = 6) -> list[dict]:
+    """Section 2 of the report: the most-connected entities, fully deterministic
+    (assertion counts and distinct cited scenes; no opinion anywhere)."""
+    with db_conn() as conn:
+        return _all(conn, """
+            select e.id, e.name, e.kind,
+                   count(*) as n_assertions,
+                   count(distinct t.scene_id) as n_scenes
+            from (
+              select subject_id as entity_id, established_in_scene as scene_id
+                from assertions where world_id = %(w)s
+              union all
+              select object_id, established_in_scene
+                from assertions where world_id = %(w)s and object_id is not null
+            ) t
+            join entities e on e.id = t.entity_id
+            group by e.id, e.name, e.kind
+            order by n_assertions desc, e.name
+            limit %(limit)s
+        """, {"w": world_id, "limit": limit})
+
+
+def list_scenes_with_text(world_id: int) -> list[dict]:
+    """Scene records with raw text, in story order — the script view's spine."""
+    with db_conn() as conn:
+        return _all(conn, """
+            select s.id, s.slug, s.story_position, s.is_flashback, s.raw_text,
+                   wk.id work_id, wk.title episode_title, wk.sort_order
+            from scenes s join works wk on wk.id = s.work_id
+            where wk.world_id = %(w)s
+            order by s.story_position, s.id
+        """, {"w": world_id})
+
+
+def entity_names(world_id: int, entity_ids: list[int]) -> dict[int, str]:
+    """id -> name for the given entities (used to scope a note's Ask seed)."""
+    ids = sorted({int(i) for i in entity_ids or [] if i})
+    if not ids:
+        return {}
+    with db_conn() as conn:
+        rows = _all(conn, """
+            select id, name from entities
+            where world_id = %(w)s and id = any(%(ids)s)
+        """, {"w": world_id, "ids": ids})
+    return {r["id"]: r["name"] for r in rows}
+
+
+def ask_question(world_id: int, question: str):
+    """Run the ask-the-bible engine (ask/engine.py) against this world.
+
+    The engine indexes result rows positionally, so it gets a plain tuple-row
+    connection (not the dict_row one the templates use). Import stays local so
+    `ui` never grows a hard module-level dependency on the ask package.
+    """
+    from ask import engine as ask_engine  # read-only import; never edited here
+
+    conn = connect(db_url())
+    try:
+        return ask_engine.ask_question(conn, world_id, question)
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Pipeline runs (P3-FRONTDOOR): the background-ingest run rows and their
+# narration event ledger. Server-only writes (the runner thread in ui/jobs.py);
+# reads are feature-detected like list_findings_composed — on a database that
+# has not run the pipeline_runs migration they return None/[] instead of 500ing
+# the theater page.
+# ---------------------------------------------------------------------------
+
+import json as _json  # noqa: E402  (stdlib; jsonb params for the run tables)
+
+# update_run accepts exactly these columns — everything else is a programming
+# error, not a query parameter (heartbeat_at is always stamped server-side).
+RUN_FIELDS = ("status", "phase", "scenes_total", "scenes_done", "facts_total",
+              "cost_usd", "error", "candidates")
+
+_RUN_SELECT = """
+    select id::text as id, world_id, user_id::text as user_id, status, phase,
+           scenes_total, scenes_done, facts_total, cost_usd, error, candidates,
+           created_at, heartbeat_at
+    from pipeline_runs
+"""
+
+
+def create_run(world_id: int, user_id: str | None, scenes_total: int = 0) -> str:
+    """Insert one running pipeline_runs row; returns its uuid as text."""
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            insert into pipeline_runs (world_id, user_id, scenes_total)
+            values (%(w)s, %(u)s::uuid, %(n)s)
+            returning id::text as id
+        """, {"w": world_id, "u": user_id, "n": scenes_total})
+        run_id = cur.fetchone()["id"]
+        conn.commit()
+    return run_id
+
+
+def append_run_event(run_id: str, kind: str, data: dict) -> int:
+    """Append one ledger event; seq is allocated per run (single writer thread
+    per run, so max(seq)+1 is race-free in practice). Returns the seq."""
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            insert into pipeline_run_events (run_id, seq, kind, data)
+            select %(r)s::uuid, coalesce(max(seq), 0) + 1, %(k)s, %(d)s::jsonb
+            from pipeline_run_events where run_id = %(r)s::uuid
+            returning seq
+        """, {"r": run_id, "k": kind, "d": _json.dumps(data or {}, default=str)})
+        seq = cur.fetchone()["seq"]
+        conn.commit()
+    return seq
+
+
+def list_run_events(run_id: str, after: int = 0) -> list[dict]:
+    """Ledger events with seq > after, in order — the theater's poll body."""
+    try:
+        with db_conn() as conn:
+            return _all(conn, """
+                select seq, kind, data, created_at
+                from pipeline_run_events
+                where run_id = %(r)s::uuid and seq > %(a)s
+                order by seq
+            """, {"r": run_id, "a": after})
+    except Exception as exc:
+        if _is_undefined_table(exc):
+            return []
+        raise
+
+
+def get_run(run_id: str) -> dict | None:
+    try:
+        with db_conn() as conn:
+            return _one(conn, _RUN_SELECT + " where id = %(r)s::uuid", {"r": run_id})
+    except Exception as exc:
+        if _is_undefined_table(exc):
+            return None
+        raise
+
+
+def latest_run_for_world(world_id: int) -> dict | None:
+    """The newest run for a world — reloading the theater page resumes
+    watching this one."""
+    try:
+        with db_conn() as conn:
+            return _one(conn, _RUN_SELECT + """
+                where world_id = %(w)s
+                order by created_at desc, id desc
+                limit 1
+            """, {"w": world_id})
+    except Exception as exc:
+        if _is_undefined_table(exc):
+            return None
+        raise
+
+
+def update_run(run_id: str, **fields) -> bool:
+    """Update whitelisted run columns; heartbeat_at is stamped on every call
+    (an empty fields dict is a pure heartbeat)."""
+    unknown = set(fields) - set(RUN_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown pipeline_runs fields: {sorted(unknown)}")
+    sets = ["heartbeat_at = now()"]
+    params: dict = {"r": run_id}
+    for key, value in fields.items():
+        if key == "candidates":
+            sets.append("candidates = %(candidates)s::jsonb")
+            params["candidates"] = None if value is None else _json.dumps(value, default=str)
+        else:
+            sets.append(f"{key} = %({key})s")
+            params[key] = value
+    with db_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"update pipeline_runs set {', '.join(sets)} "
+            "where id = %(r)s::uuid returning id",
+            params)
+        changed = cur.fetchone() is not None
+        conn.commit()
+    return changed
+
+
+def works_with_scenes(world_id: int) -> list[dict]:
+    """Works + ordered scene rows for one world — resume reconstructs
+    duck-typed ParsedWork objects from these (ui/jobs.py rebuild_works)."""
+    with db_conn() as conn:
+        works = _all(conn, """
+            select id, title, source_file, sort_order from works
+            where world_id = %(w)s order by sort_order, id
+        """, {"w": world_id})
+        for wk in works:
+            wk["scenes"] = _all(conn, """
+                select slug, story_position, is_flashback, raw_text
+                from scenes where work_id = %(k)s
+                order by story_position, id
+            """, {"k": wk["id"]})
+    return works
 
 
 def unseal_finding(world_id: int, finding_id: int) -> bool:

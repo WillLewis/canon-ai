@@ -117,9 +117,9 @@ Each family defines: candidate query → judgment the LLM applies → citation c
   found in the graph — quoted and cited — or state explicitly that none exists. No note may
   say a motivation is *weak*; only *present*, *distant*, or *absent*.
 - **Cap:** ≤ 5. **Kill switch:** F4 carries its own dismissal-rate threshold (§ metrics); if
-  it blows the budget in Phase 1, F4 is pulled and F1–F3 remain the product. Shipping it in
-  v1 is a deliberate bet that the note writers most want is worth the trust risk — the kill
-  switch is the hedge.
+  it blows the budget in pre-launch friendly-writer triage or the first live cohort, F4 is
+  pulled and F1–F3 remain the product. Shipping it in v1 is a deliberate bet that the note
+  writers most want is worth the trust risk — the kill switch is the hedge.
 
 ## Phrasing contract — drafted off coding agents
 
@@ -232,8 +232,9 @@ for bulk corpus backfills (season uploads), not the first-script experience.
 **Decision: the first script is free.** COGS ≈ $1–2 means 1,000 free Reader's Reports cost
 roughly a MacBook — and each one manufactures exactly the traction evidence a pre-seed raise
 needs (reports run, dismissal rates, draft-2 return rate, share-forwards). Willingness-to-pay
-is already being measured honestly by Test B at $99–199; the free tier's job is volume and
-proof of pull, not revenue. Guardrails so free stays cheap:
+gets its first honest measurement at launch (paid-tier conversion + bible orders at
+$99–199); the free tier's job is volume and proof of pull, not revenue. Guardrails so free
+stays cheap:
 
 - **Account required** (free — email or Google sign-in; Supabase auth per R9). No anonymous
   runs: rate limits, note permanence, and the draft-2 diff all hang off identity, and every
@@ -264,8 +265,8 @@ retention mechanism:
   can't rebuild with a weekend of prompting.
 
 Fundraise framing: the free tier converts inference dollars into the two charts a deck needs
-— cumulative reports run, and week-over-week draft-2 return rate — while Test B supplies the
-willingness-to-pay slide.
+— cumulative reports run, and week-over-week draft-2 return rate — while paid-tier
+conversion and bible orders supply the willingness-to-pay slide.
 
 ## Quality bars & metrics
 
@@ -274,16 +275,19 @@ willingness-to-pay slide.
   than missed findings).
 - **Dismissal-rate doctrine (extends the false-positive doctrine):** subjective notes are
   *more* corrosive than false continuity flags — the writer can't prove a bad note wrong,
-  they just decide the tool has bad taste and leave. Per-family Phase 1 thresholds:
-  dismissal > 40% across Test B+C corpora → family pulled back to deterministic-only or
-  killed (F4 first in line). No prompt-tuning heroics past two iterations.
+  they just decide the tool has bad taste and leave. Per-family threshold: dismissal > 40%
+  — measured pre-launch via operator + friendly-writer triage on internal corpora (PLAN.md
+  Phase 3 fidelity gates), then on the first live cohort → family pulled back to
+  deterministic-only or killed (F4 first in line). No prompt-tuning heroics past two
+  iterations.
 - **Eval extension:** add planted coverage items to `fixtures/greyharbor/answer-key.md` —
   a dangling setup, a dormant secret, an unmotivated turn, an unanswered world question —
   **plus decoys that must NOT be flagged** (a setup that pays off, knowledge that surfaces,
   a motivated action). Coverage precision/recall join the eval harness like check findings.
-- **The Phase 1 measurement that sets the dial:** for every Test B/C delivery, log per
-  section: seal rate, dismissal rate, addressed-by-next-draft rate, and forwards. This data
-  — not intuition — decides how far the subjective dial opens and whether F4 lives.
+- **The measurement that sets the dial:** per-section logging of seal rate, dismissal
+  rate, addressed-by-next-draft rate, and forwards — friendly-writer sessions pre-launch,
+  live product analytics after. This data — not intuition — decides how far the subjective
+  dial opens and whether F4 lives.
 
 ## Dependencies & phasing
 
@@ -291,9 +295,9 @@ willingness-to-pay slide.
   misses the recall bar, the report inherits the failure. Nothing here starts before the
   greyharbor gate passes.
 - Build order after exit: F2 (pure SQL) → F1 (extraction hook exists) → F3 (epistemic
-  queries) → F4 (behind its kill-switch metric) → CLI renderer → free-tier plumbing →
-  retcon ripple (#2) → web surface (R9) when a wedge wins → audience ledger (#3) → API (#4)
-  on trigger.
+  queries) → F4 (behind its kill-switch metric) → CLI renderer → then the launch build per
+  docs/workstreams.md waves (web surface, free-tier plumbing, retcon ripple all inside the
+  build phase) → audience ledger (#3) and API (#4) post-launch, on trigger.
 
 ## Remaining open questions
 

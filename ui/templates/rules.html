@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{# Rule builder (P3-RULES). Structured only: every field is a select over the
+   closed predicate vocabulary, this world's entities/traits, its scene
+   positions, or the check families. The optional label is the only free text.
+   Nothing here generates story — rules are the writer's own law, compiled. #}
+{% block title %}Rules · {{ world.name }}{% endblock %}
+{% block foottag %}Rule builder — structured constraints, compiled to cited checks.{% endblock %}
+{% block content %}
+
+<div class="page-head report-head" id="rules-head">
+  <h1>World rules <span class="sub-inline">— {{ n_enabled }} enabled of {{ rules|length }}</span></h1>
+  <p class="sub">Your world's laws, built from the closed vocabulary and compiled to the same
+    cited checks the report runs. A rule that can't compile unambiguously can't be created.</p>
+  <p class="kbd-hint muted small">keyboard: <kbd>n</kbd> new rule · <kbd>Enter</kbd> add</p>
+</div>
+
+<section class="panel" id="rule-builder">
+  <h2>Add a rule</h2>
+  <form method="post" action="/worlds/{{ world.id }}/rules" class="rule-form" id="rule-form">
+    <label>kind
+      <select name="kind" id="rule-kind">
+        <option value="cannot">cannot — forbid a fact</option>
+        <option value="only">only — one entity may</option>
+        <option value="exception">exception — skip a check for one entity</option>
+      </select>
+    </label>
+
+    {% macro entity_options(none_label=None) -%}
+      {% if none_label %}<option value="">{{ none_label }}</option>{% endif %}
+      {% for e in entities %}<option value="{{ e.id }}">{{ e.name }} ({{ e.kind }})</option>{% endfor %}
+    {%- endmacro %}
+    {% macro predicate_options() -%}
+      {% for p in predicates %}<option value="{{ p }}" {% if p in intransitive %}data-intransitive="1"{% endif %}>{{ p }}</option>{% endfor %}
+    {%- endmacro %}
+
+    <fieldset data-kind="cannot" id="fields-cannot">
+      <label>who
+        <select name="subject_mode" id="subject-mode">
+          <option value="entity">a specific entity</option>
+          <option value="trait">any entity of a trait</option>
+        </select>
+      </label>
+      <label id="subject-entity-field">entity
+        <select name="subject_entity_id">{{ entity_options() }}</select>
+      </label>
+      <label id="subject-trait-field" hidden>trait
+        <select name="subject_trait">
+          <option value="">(pick a trait)</option>
+          {% for t in traits %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>cannot
+        <select name="predicate">{{ predicate_options() }}</select>
+      </label>
+      <label>object
+        <select name="object_entity_id">{{ entity_options(none_label='(none / any)') }}</select>
+      </label>
+    </fieldset>
+
+    <fieldset data-kind="only" id="fields-only" hidden>
+      <label>only
+        <select name="only_entity_id">{{ entity_options() }}</select>
+      </label>
+      <label>may
+        <select name="only_predicate">{{ predicate_options() }}</select>
+      </label>
+      <label>object
+        <select name="only_object_entity_id">{{ entity_options(none_label='(none / any)') }}</select>
+      </label>
+    </fieldset>
+
+    <fieldset data-kind="exception" id="fields-exception" hidden>
+      <label>skip check
+        <select name="exc_check">
+          {% for f in families %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>for
+        <select name="exc_entity_id">{{ entity_options() }}</select>
+      </label>
+      <label>from pos
+        <select name="pos_from">
+          <option value="">(start)</option>
+          {% for p in positions %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>to pos
+        <select name="pos_to">
+          <option value="">(end)</option>
+          {% for p in positions %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+    </fieldset>
+
+    <label id="severity-field">severity
+      <select name="severity">
+        {% for s in severities %}<option value="{{ s }}" {{ 'selected' if s == default_severity }}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>label
+      <input type="text" name="label" maxlength="120" placeholder="optional writer label">
+    </label>
+    <button type="submit" class="btn-note btn-rule-add"
+      {% if not can_edit %}disabled title="requires the editor role"
+      {% else %}title="add this rule (Enter)"{% endif %}>Add rule</button>
+  </form>
+</section>
+
+<section class="panel" id="rule-list">
+  <h2>Rules</h2>
+  {% if not rules %}
+  <p class="muted">No rules yet. A rule you add here runs beside the universal checks —
+    same severities, same citations, same seals.</p>
+  {% endif %}
+  {% for r in rules %}
+  <div class="acard rule-card{{ ' rule-off' if not r.enabled }}" id="rule-{{ r.id }}"
+       {% if not r.enabled %}style="opacity:.55"{% endif %}>
+    <div class="acard-head">
+      <span class="badge">{{ r.kind }}</span>
+      <span class="rule-desc">{{ r.description }}</span>
+      {% if r.label %}<span class="chip" title="writer label">“{{ r.label }}”</span>{% endif %}
+      {% if r.kind != 'exception' and r.params.severity %}<span class="chip">{{ r.params.severity }}</span>{% endif %}
+      {% if not r.enabled %}<span class="badge rule-disabled-badge">disabled</span>{% endif %}
+    </div>
+    <div class="note-actions">
+      <form method="post" action="/worlds/{{ world.id }}/rules/{{ r.id }}/toggle" class="act">
+        <input type="hidden" name="enabled" value="{{ '0' if r.enabled else '1' }}">
+        <button type="submit" class="btn-note btn-rule-toggle"
+          {% if not can_edit %}disabled title="requires the editor role"
+          {% else %}title="{{ 'stop running this rule' if r.enabled else 'run this rule again' }}"{% endif %}>
+          {{ 'Disable' if r.enabled else 'Enable' }}</button>
+      </form>
+      <form method="post" action="/worlds/{{ world.id }}/rules/{{ r.id }}/delete" class="act">
+        <button type="submit" class="btn-note btn-note-dismiss btn-rule-delete"
+          {% if not can_edit %}disabled title="requires the editor role"
+          {% else %}title="delete permanently"{% endif %}>Delete</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var kind = document.getElementById('rule-kind');
+  var mode = document.getElementById('subject-mode');
+  function sync() {
+    document.querySelectorAll('#rule-form fieldset[data-kind]').forEach(function (fs) {
+      fs.hidden = fs.dataset.kind !== kind.value;
+    });
+    document.getElementById('severity-field').hidden = kind.value === 'exception';
+    var byTrait = mode.value === 'trait';
+    document.getElementById('subject-entity-field').hidden = byTrait;
+    document.getElementById('subject-trait-field').hidden = !byTrait;
+  }
+  kind.addEventListener('change', sync);
+  mode.addEventListener('change', sync);
+  sync();
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey
+        && !/^(input|select|textarea)$/i.test(document.activeElement.tagName)) {
+      e.preventDefault();
+      kind.focus();
+    }
+  });
+})();
+</script>
+{% endblock %}

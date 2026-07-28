@@ -15,6 +15,27 @@ def has_credentials() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
 
 
+def _metered(create):
+    """COGS metering (ops.meter -> usage_events, docs/ops.md), opt-in via
+    CANON_METERING_DB_URL. Fail-silent: without the env, or on any setup failure,
+    the original callable returns untouched — no-DB runs behave exactly as before.
+    user_id stays NULL for pipeline runs; CANON_METERING_WORLD_ID attributes the
+    world being processed when the caller exports it."""
+    dsn = os.environ.get("CANON_METERING_DB_URL")
+    if not dsn:
+        return create
+    try:
+        import psycopg
+        from ops import meter
+        cursor = psycopg.connect(dsn, autocommit=True).cursor()
+        wid = os.environ.get("CANON_METERING_WORLD_ID")
+        return meter("extraction", cursor=cursor,
+                     user_id=os.environ.get("CANON_METERING_USER_ID") or None,
+                     world_id=int(wid) if wid else None)(create)
+    except Exception:
+        return create  # metering must never block extraction
+
+
 def make_client():
     try:
         import anthropic
@@ -24,7 +45,9 @@ def make_client():
         ) from exc
     # No per-request training flag exists in the SDK. The configured key must
     # belong to a no-training / zero-data-retention workspace.
-    return anthropic.Anthropic()
+    client = anthropic.Anthropic()
+    client.messages.create = _metered(client.messages.create)
+    return client
 
 
 def first_text(response: Any) -> str | None:

@@ -18,13 +18,15 @@ import os
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import db
-from .format import gloss_range, highlight, object_side, quote_present, SEVERITY_RANK
+from . import auth, db
+from . import notes as note_vm
+from .format import (gloss_range, highlight, object_side, plain_assertion,
+                     quote_present, SEVERITY_RANK)
 
 _HERE = Path(__file__).resolve().parent
 
@@ -32,12 +34,66 @@ app = FastAPI(title="Canon AI — Triage Workbench")
 app.mount("/static", StaticFiles(directory=str(_HERE / "static")), name="static")
 templates = Jinja2Templates(directory=str(_HERE / "templates"))
 
+# Wave 4 routers (billing, rule builder, trust) — self-contained modules wired
+# here so parallel workstreams never had to edit this file (docs/workstreams.md).
+from billing.routes import router as _billing_router  # noqa: E402
+from . import jobs as _jobs  # noqa: E402
+from . import rules_ui as _rules_ui  # noqa: E402
+from . import share_ui as _share_ui  # noqa: E402
+from . import trust_ui as _trust_ui  # noqa: E402
+
+app.include_router(_billing_router)
+app.include_router(_jobs.router)
+app.include_router(_rules_ui.router)
+app.include_router(_share_ui.router)
+app.include_router(_trust_ui.router)
+
+# ---------------------------------------------------------------------------
+# Ops wiring (P3-WIRING): the ask rate limit, per docs/ops.md. Reads (report/
+# script views) stay unlimited; only the POST that runs the ask engine spends
+# quota, and only after it succeeds (record_action counting contract). The
+# tier hook is billing's resolver: CANON_FORCE_TIER wins (dev override, incl.
+# the AUTH_DISABLED bypass user), else billing_subscriptions, else 'free'.
+# ---------------------------------------------------------------------------
+from billing import store as _billing_store  # noqa: E402
+from ops import alerts as _ops_alerts  # noqa: E402
+from ops import ratelimit as _ops_ratelimit  # noqa: E402
+from ops.middleware import rate_limited as _rate_limited  # noqa: E402
+
+
+def _ops_cursor_factory():
+    # Resolved through the db module at call time so tests can fake db.ops_cursor.
+    return db.ops_cursor()
+
+
+# Module attribute (not a closure) so tests can swap in a fake tier resolver.
+ask_tier_resolver = _billing_store.make_tier_resolver(_ops_cursor_factory)
+
+_ask_guard = _rate_limited("ask", cursor_factory=_ops_cursor_factory,
+                           tier_resolver=lambda user: ask_tier_resolver(user))
+
+
+def _record_ask(world_id: int, user) -> None:
+    """Log one consumed ask AFTER it succeeded (denied/failed attempts are
+    free). Recording failure never breaks the answer — same fail-open stance
+    as the rest of the ops floor, and the alert is how we notice."""
+    try:
+        _ops_ratelimit.record_action(
+            db.ops_cursor(), user_id=getattr(user, "id", None) or str(user),
+            action="ask", world_id=world_id)
+    except Exception as exc:
+        _ops_alerts.alert("ratelimit_db_error", {
+            "action": "ask", "stage": "record_action", "error": repr(exc)})
+
 # Expose the pure display helpers to every template.
 templates.env.globals["gloss_range"] = gloss_range
 templates.env.globals["object_side"] = object_side
 templates.env.globals["quote_present"] = quote_present
+templates.env.globals["plain_assertion"] = plain_assertion
 templates.env.globals["SEVERITY_RANK"] = SEVERITY_RANK
 templates.env.filters["highlight"] = highlight
+templates.env.globals["FAMILY_LABELS"] = note_vm.FAMILY_LABELS
+templates.env.globals["FAMILIES"] = note_vm.FAMILIES
 
 PER_PAGE = 100
 
@@ -102,8 +158,41 @@ async def _on_error(request: Request, exc: Exception):
 # Routes
 # ---------------------------------------------------------------------------
 
+def _safe_next(next_path: str) -> str:
+    """Only same-app paths — never an open redirect."""
+    if (not next_path.startswith("/") or next_path.startswith("//")
+            or "://" in next_path):
+        return "/upload"
+    return next_path
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, next: str = "/upload"):
+    """Supabase-backed sign-in/sign-up (email magic link + Google OAuth).
+
+    The page mints the sb-access-token cookie ui/auth.py verifies. Already
+    signed in (including the AUTH_DISABLED dev bypass) -> straight to next.
+    """
+    dest = _safe_next(next)
+    if auth.peek_user(request):
+        return RedirectResponse(dest, status_code=303)
+    try:                       # login must render even without a database
+        worlds = db.list_worlds()
+    except Exception:
+        worlds = []
+    return _render(request, "login.html", None, worlds, nav="",
+                   next_path=dest,
+                   supabase_url=os.environ.get("SUPABASE_URL", ""),
+                   supabase_anon_key=os.environ.get("SUPABASE_ANON_KEY", ""))
+
+
 @app.get("/", response_class=HTMLResponse)
 def overview(request: Request, world: str | None = None):
+    # P3-FRONTDOOR: anonymous visitors get the landing poster; signed-in users
+    # (and the AUTH_DISABLED dev owner) keep the workbench overview unchanged.
+    if auth.peek_user(request) is None:
+        return templates.TemplateResponse(request, "landing.html",
+                                          {"demo_url": "/demo/report"})
     worlds = db.list_worlds()
     active = _pick_world(world, worlds)
     if not active:
@@ -214,7 +303,10 @@ def findings(request: Request, world: str | None = None):
     active = _pick_world(world, worlds)
     if not active:
         return _no_world(request, worlds)
-    rows = db.list_findings(active["id"])
+    # Composed: universal checks + writer-authored rules, exceptions applied
+    # (canon.rules.compose_findings; falls back to plain findings when the
+    # world_rules table hasn't landed on this database).
+    rows = db.list_findings_composed(active["id"])
     return _render(request, "findings.html", active, worlds, nav="findings",
                    findings=rows)
 
@@ -239,19 +331,21 @@ async def _form(request: Request) -> dict:
 
 
 @app.post("/findings/{finding_id}/seal")
-async def seal(request: Request, finding_id: int, world: str | None = None):
+async def seal(request: Request, finding_id: int, world: str | None = None,
+               user: auth.User = Depends(auth.require_role("editor"))):
     worlds = db.list_worlds()
     active = _pick_world(world, worlds)
     if not active:
         return _no_world(request, worlds)
     form = await _form(request)
-    db.seal_finding(active["id"], finding_id, form.get("reason", ""))
+    db.seal_finding(active["id"], finding_id, form.get("reason", ""), ruled_by=user.id)
     return RedirectResponse(
         url=f"/findings/{finding_id}?world={active['name']}", status_code=303)
 
 
 @app.post("/findings/{finding_id}/unseal")
-async def unseal(request: Request, finding_id: int, world: str | None = None):
+async def unseal(request: Request, finding_id: int, world: str | None = None,
+                 user: auth.User = Depends(auth.require_role("editor"))):
     worlds = db.list_worlds()
     active = _pick_world(world, worlds)
     if not active:
@@ -259,6 +353,222 @@ async def unseal(request: Request, finding_id: int, world: str | None = None):
     db.unseal_finding(active["id"], finding_id)
     return RedirectResponse(
         url=f"/findings/{finding_id}?world={active['name']}", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Note surface (P3-SURFACE) — the writer-facing Reader's Report views.
+# World-scoped by path id: /worlds/{world_id}/... . Read views stay open
+# (viewers see everything, action buttons disabled); the two note writes and
+# nothing else gate on the editor role. No LLM calls anywhere below — the
+# engine wrote the rows, these routes only render them.
+# ---------------------------------------------------------------------------
+
+def _surface_world(world_id: int) -> tuple[dict | None, list[dict]]:
+    worlds = db.list_worlds()
+    active = next((w for w in worlds if w["id"] == world_id), None)
+    return active, worlds
+
+
+def _surface_role(request: Request, world_id: int) -> tuple[str | None, bool]:
+    """(role, can_edit) for read views — never raises; anonymous = read-only."""
+    user = auth.peek_user(request, world_id)
+    role = user.role if user else None
+    return role, auth.has_role(role, "editor")
+
+
+def _live_first(findings: list[dict]) -> tuple[list[dict], list[dict]]:
+    live = [f for f in findings if not f.get("sealed")]
+    sealed = [f for f in findings if f.get("sealed")]
+    return live, sealed
+
+
+def _report_context(request: Request, world_id: int,
+                    ask_q: str = "", ask_result=None) -> dict | None:
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return None
+    notes = db.list_coverage_notes(world_id)
+    names = db.entity_names(world_id, note_vm.all_entity_ids(notes))
+    note_vm.decorate_notes(world_id, notes, names)
+    grouped = note_vm.split_notes(notes)
+    live, sealed_findings = _live_first(db.list_findings_composed(world_id))
+    role, can_edit = _surface_role(request, world_id)
+    summary = db.world_summary(world_id)
+    # The "Verify your canon (N)" pill count. world_summary already carries the
+    # by-status assertion counts, so the report render keeps its query budget
+    # (db.count_drafts is the same number for callers without a summary in hand).
+    draft_count = next((r["n"] for r in summary["assertions_by_status"]
+                        if r["status"] == "draft"), 0)
+    return {
+        "world": active, "worlds": worlds, "nav": "report",
+        "grouped": grouped,
+        "findings_live": live[: note_vm.FINDINGS_CAP],
+        "findings_more": max(0, len(live) - note_vm.FINDINGS_CAP),
+        "findings_sealed_n": len(sealed_findings),
+        "load_bearing": db.load_bearing(world_id, note_vm.LOAD_BEARING_CAP),
+        "summary": summary,
+        "draft_count": draft_count,
+        "diff": note_vm.diff_summary(notes),
+        "role": role, "can_edit": can_edit,
+        "ask_q": ask_q, "ask_result": ask_result,
+    }
+
+
+@app.get("/worlds/{world_id}/report", response_class=HTMLResponse)
+def report_view(request: Request, world_id: int, ask: str | None = None):
+    ctx = _report_context(request, world_id, ask_q=ask or "")
+    if ctx is None:
+        return _no_world(request, db.list_worlds())
+    return templates.TemplateResponse(request, "report.html", ctx)
+
+
+@app.get("/worlds/{world_id}/report/diff", response_class=HTMLResponse)
+def report_diff(request: Request, world_id: int):
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return _no_world(request, worlds)
+    notes = db.list_coverage_notes(world_id)
+    note_vm.decorate_notes(world_id, notes)
+    return templates.TemplateResponse(request, "report_diff.html", {
+        "world": active, "worlds": worlds, "nav": "report",
+        "diff": note_vm.diff_summary(notes),
+    })
+
+
+def _script_context(request: Request, world_id: int, scene: int | None,
+                    quote: str | None, ask_q: str = "", ask_result=None) -> dict | None:
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return None
+    scenes = db.list_scenes_with_text(world_id)
+    notes = db.list_coverage_notes(world_id)
+    names = db.entity_names(world_id, note_vm.all_entity_ids(notes))
+    note_vm.decorate_notes(world_id, notes, names)
+    by_scene = note_vm.notes_by_scene(notes)
+    findings_by_scene: dict[int, list[dict]] = {}
+    live, _sealed = _live_first(db.list_findings_composed(world_id))
+    for f in live:
+        if f.get("scene_id"):
+            findings_by_scene.setdefault(f["scene_id"], []).append(f)
+    role, can_edit = _surface_role(request, world_id)
+    return {
+        "world": active, "worlds": worlds, "nav": "script",
+        "scenes": scenes,
+        "notes_by_scene": by_scene,
+        "findings_by_scene": findings_by_scene,
+        "focus_scene": scene,
+        "focus_quote": quote or None,
+        "role": role, "can_edit": can_edit,
+        "ask_q": ask_q, "ask_result": ask_result,
+    }
+
+
+@app.get("/worlds/{world_id}/script", response_class=HTMLResponse)
+def script_view(request: Request, world_id: int, scene: int | None = None,
+                quote: str | None = None, ask: str | None = None):
+    ctx = _script_context(request, world_id, scene, quote, ask_q=ask or "")
+    if ctx is None:
+        return _no_world(request, db.list_worlds())
+    return templates.TemplateResponse(request, "script.html", ctx)
+
+
+async def _note_status_change(request: Request, world_id: int, note_id: str,
+                              status: str, user: auth.User):
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return _no_world(request, worlds)
+    db.set_note_status(world_id, note_id, status, changed_by=user.id)
+    return RedirectResponse(url=f"/worlds/{world_id}/report", status_code=303)
+
+
+@app.post("/worlds/{world_id}/notes/{note_id}/seal")
+async def seal_note(request: Request, world_id: int, note_id: str,
+                    user: auth.User = Depends(auth.require_role("editor"))):
+    """Writer ruled the flagged thing intentional. Permanent: never re-raised."""
+    return await _note_status_change(request, world_id, note_id, "sealed", user)
+
+
+@app.post("/worlds/{world_id}/notes/{note_id}/dismiss")
+async def dismiss_note(request: Request, world_id: int, note_id: str,
+                       user: auth.User = Depends(auth.require_role("editor"))):
+    """Writer ruled the note wrong. Permanent, one keystroke, no guilt-trip."""
+    return await _note_status_change(request, world_id, note_id, "dismissed", user)
+
+
+@app.post("/worlds/{world_id}/ask", response_class=HTMLResponse)
+async def ask_pane(request: Request, world_id: int,
+                   user: auth.User = Depends(_ask_guard)):
+    """The ask-the-bible pane. Calls ask/engine.py (SQL templates, no LLM) and
+    re-renders whichever view hosted the pane, answer + citations included.
+    Refusals render verbatim — an uncited answer never ships. Rate-limited per
+    account (429 + Retry-After over the tier's quota; docs/ops.md)."""
+    form = await _form(request)
+    question = (form.get("question") or "").strip()
+    view = form.get("view") or "report"
+    result = db.ask_question(world_id, question) if question else None
+    if result is not None:
+        _record_ask(world_id, user)   # success spends quota; nothing else does
+    if view == "script":
+        scene = form.get("scene")
+        ctx = _script_context(request, world_id,
+                              int(scene) if (scene or "").isdigit() else None,
+                              form.get("quote") or None,
+                              ask_q=question, ask_result=result)
+        template = "script.html"
+    else:
+        ctx = _report_context(request, world_id, ask_q=question, ask_result=result)
+        template = "report.html"
+    if ctx is None:
+        return _no_world(request, db.list_worlds())
+    return templates.TemplateResponse(request, template, ctx)
+
+
+# ---------------------------------------------------------------------------
+# Confirm queue (P3-CONFIRM) — "verify your canon". Extraction loads sub-gate
+# assertions as status 'draft' (canon/store.py); this surface lists them and
+# records the writer's ruling: Confirm -> canon, Reject -> rejected. Both are
+# guarded WHERE status='draft' in ui/db.py, so a ruling never flips a settled
+# row. Read view stays open (viewers see the queue, buttons disabled); the two
+# writes gate on the editor role. Nothing is generated — every card shows an
+# extracted fact beside its verbatim supporting quote, and the writer judges.
+# ---------------------------------------------------------------------------
+
+@app.get("/worlds/{world_id}/confirm", response_class=HTMLResponse)
+def confirm_queue(request: Request, world_id: int):
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return _no_world(request, worlds)
+    drafts = db.list_draft_assertions(world_id)
+    role, can_edit = _surface_role(request, world_id)
+    return templates.TemplateResponse(request, "confirm.html", {
+        "world": active, "worlds": worlds, "nav": "confirm",
+        "drafts": drafts,
+        "verified_through": db.last_story_position(world_id),
+        "role": role, "can_edit": can_edit,
+    })
+
+
+async def _rule_assertion(request: Request, world_id: int, assertion_id: int,
+                          status: str, user: auth.User):
+    active, worlds = _surface_world(world_id)
+    if not active:
+        return _no_world(request, worlds)
+    db.rule_assertion(world_id, assertion_id, status, ruled_by=user.id)
+    return RedirectResponse(url=f"/worlds/{world_id}/confirm", status_code=303)
+
+
+@app.post("/worlds/{world_id}/assertions/{assertion_id}/confirm")
+async def confirm_assertion(request: Request, world_id: int, assertion_id: int,
+                            user: auth.User = Depends(auth.require_role("editor"))):
+    """Writer ruled the extracted fact true: draft -> canon (idempotent)."""
+    return await _rule_assertion(request, world_id, assertion_id, "canon", user)
+
+
+@app.post("/worlds/{world_id}/assertions/{assertion_id}/reject")
+async def reject_assertion(request: Request, world_id: int, assertion_id: int,
+                           user: auth.User = Depends(auth.require_role("editor"))):
+    """Writer ruled the extraction wrong: draft -> rejected (idempotent)."""
+    return await _rule_assertion(request, world_id, assertion_id, "rejected", user)
 
 
 def main() -> None:

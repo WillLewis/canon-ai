@@ -20,9 +20,9 @@ Writers of serialized fiction must hold an ever-growing canon — who knows what
 
 1. **Catch real errors:** on a multi-episode corpus, find genuine continuity violations a careful human reader would confirm, with ≤2 false positives per episode.
 2. **Answer with receipts:** "Ask the Bible" returns correct, scene-cited answers to ≥80% of canon questions in test sets.
-3. **Prove willingness to pay:** ≥3 of 5 concierge bible customers pay $99–199 and call the output pitch-grade (Phase 1, Test B).
-4. **Prove retention shape:** ≥2 of 5 dev-slate writers return unprompted in week 2 (Phase 1, Test C).
-5. **Validate or kill the microdrama wedge** with 10 discovery calls (Phase 1, Test A).
+3. **Prove willingness to pay:** ≥3 of 5 bible customers pay $99–199 through the live product and call the output pitch-grade (post-launch, Test B).
+4. **Prove retention shape:** ≥2 of 5 dev-slate writers return unprompted in week 2 of using the live app (post-launch, Test C).
+5. **Validate or kill the microdrama wedge** with 10 discovery calls (Test A — zero code; may run during the build).
 
 ## Non-goals (v0)
 
@@ -51,7 +51,7 @@ Writers of serialized fiction must hold an ever-growing canon — who knows what
 - **R5 Ask the Bible (CLI):** NL question → SQL → answer + citations; refuses to answer without a citation. *AC: 8/10 test questions correct with correct citations.*
 - **R6 Continuity checks (CLI):** dead-speaker, presence-conflict, premature-knowledge, destroyed-location-use, dangling-reference — each finding carries severity, plain-English explanation, citation, and respects `sealed`. *AC: all planted greyharbor errors found; ≤2 false positives/episode.*
 
-### P1 — fast follows once a wedge wins
+### P1 — launch scope (built in PLAN.md Phase 3, which runs directly after Phase 0)
 - **R7 Build-mode bible export:** canon graph → formatted series-bible document with citations (the Test B deliverable, productized).
 - **R8 Reader's Report** (subsumes hole-finder + setup/payoff; full spec: `docs/readers-report.md`): grounded coverage document — deterministic candidate queries, LLM does selection/phrasing only, citation validator drops anything that doesn't verify, note families F1–F4 with per-family dismissal-rate kill switches, seal/dismiss permanence. First script free; account required (email or Google). *AC: planted coverage items in greyharbor found, decoys not flagged; report ≤ 2 pages.*
 - **R9 Minimal web app:** Supabase auth (email + Google) + RLS, upload, report viewing; one writer = one world. Surface spec: "note surface" section of `docs/readers-report.md` (script-first split view, anchored notes, one-keystroke triage, draft-2 diff).
@@ -79,4 +79,4 @@ Writers of serialized fiction must hold an ever-growing canon — who knows what
 
 ## Timeline
 
-No hard deadlines. Phasing per PLAN.md: Phase 0 weeks 1–3, Phase 1 weeks 3–8, convergence weeks 9–12. The only date-like commitment: if Phase 0 exit criteria aren't met by end of week 5 (calendar slack included), trigger the rethink protocol in PLAN.md rather than extending silently.
+No hard deadlines. Execution order per PLAN.md (re-sequenced 2026-07-02): Phase 0 (spike) → Phase 3 (build & paid launch, to the pre-launch fidelity gates) → Phase 1 (market validation on the live product) → Phase 2 (double down). The only date-like commitment: if Phase 0 exit criteria aren't met by end of week 5 (calendar slack included), trigger the rethink protocol in PLAN.md rather than extending silently — that trigger is the one cheap exit before the build-phase spend.
