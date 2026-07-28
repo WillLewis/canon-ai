@@ -196,23 +196,23 @@ needs gets built (scope fence below).
 | Versioned skill definition (id, name, formats, artifact scopes, inputs, controls, context policy, prompt template + version, output schema, validation, model profile, returns prose / structured artifacts / both, creates proposal / candidate branch / direct transformation, UI affordance, telemetry) | docs/generation-pivot.md | G1-SKILLS | G3-GENSERVICE, G3-STUDIO |
 | StoryContextBundle + context manifest (counts line: facts included/available, locked beats, adjacent scenes, character cards, Story DNA version, prompt version) | docs/generation-pivot.md | G1-CONTEXT | G3-GENSERVICE, G3-STUDIO |
 | Branch / snapshot / candidate / artifact-version / locked-element DDL + proposal lifecycle (proposed → accepted → canonized \| rejected) | supabase migration + db/schema.sql | G1-SCHEMA | G2-BRANCH, all of G3, checks |
-| Generation-run lifecycle: run statuses (**including cancelled** — pipeline_runs has no such state, and a status CHECK constraint is DDL), phases, ledger event kinds, poll-endpoint JSON shape. Frozen in G0 precisely so the DDL can land in G1 while the service ships in G3 without reopening the lane | docs/generation-pivot.md | G1-SCHEMA (DDL) + G3-GENSERVICE (service) | G3-STUDIO composer |
+| Generation-run lifecycle — **ratified 2026-07-27 (decision 4 below):** statuses `queued \| running \| succeeded \| failed \| cancelled`; phases `queued \| context_compiling \| provider_streaming \| candidate_validating \| story_tests \| persisting \| completed`; event kinds = the nine registry provider events **plus `cancel_requested` and `cancelled`** (cost-cap aborts surface as `generation_failed` + error class, not a new kind); poll endpoint mirrors the `{run, events, next}` shape of `/api/runs/{id}/events`. Frozen in G0 precisely so the CHECK-constraint DDL lands in G1 while the service ships in G3 without reopening the lane | docs/generation-pivot.md | G1-SCHEMA (DDL) + G3-GENSERVICE (service) | G3-STUDIO composer |
 | Acceptance API + Story Tests result shape (apply/accept-passage/restore calls; the branch-scoped findings diff the drawer renders) | docs/generation-pivot.md | G2-BRANCH (state ops) + G3-ACCEPT (verification loop) | G3-STUDIO |
-| Semantic color + type lanes for generation. **Collision note (G0 must resolve):** the brief wants non-photo blue = AI proposal and wax brown = locked/pinned/STET, but DESIGN.md already assigns #41708F to *note*-severity pencils and #5C4632 to *sealed/STET* — either mint fresh tokens for proposal + locked or explicitly redefine the note/sealed lanes. Graphite = neutral metadata/advisory joins the ratified set (it must not wait for optional G4-ADVISORY). Red stays caught-only; black ink = user/accepted; faded = discarded. `test_design_system.py` selector rules follow the decision | DESIGN.md + tests/test_design_system.py allowed selectors | G1-RECONCILE, G3-STUDIO | all UI |
+| Semantic color + type lanes for generation — **ratified 2026-07-27 (decision 6 below):** fresh tokens, no redefinition — proposal blue `#2F6F9F` (streamed/unaccepted AI text), locked/pinned umber `#6B5338`; graphite stays neutral metadata/advisory; existing note `#41708F` and sealed/STET `#5C4632` keep their meanings untouched; red stays caught-only; black ink = user/accepted; faded = discarded. DESIGN.md text + `test_design_system.py` selector rules updated by G1-RECONCILE | DESIGN.md + tests/test_design_system.py allowed selectors | G1-RECONCILE, G3-STUDIO | all UI |
 | Story DNA object (full field list frozen in G0 — G1-SCHEMA lays down its storage and G1-CONTEXT compiles it, so siblings must not be guessing at the shape) + format profiles (television / film / microdrama — defaults, not grammars) | docs/generation-pivot.md (shape) + G1-SCHEMA (storage) | G1-SKILLS | G1-CONTEXT, G3-STUDIO |
 
 ### Wave G0 — doctrine & contracts (merges alone, before any parallel session spawns)
 
 | ID | Workstream | Scope | Notes |
 |---|---|---|---|
-| G0-PIVOT | Pivot doc, doctrine flip, contracts | `docs/generation-pivot.md` (the brief's 13 sections: inventory, unchanged/extended components, superseded decisions, target architecture, data-model changes, UI architecture, skill architecture, migration risks, privacy/rights, roadmap, slice non-goals, open decisions); **inline the ARCHITECTURE_PLAN.md Phase F branch design into the pivot doc** (branches, revisions, branch-local replacement rows — ARCHITECTURE_PLAN.md is gitignored, so worktree sessions can't read it); new ADRs — D12 generation-first (supersedes D1), D13 multi-provider model layer, D14 branch model, D15 proposal lifecycle & locked-vs-sealed-vs-canonized; rewrite the "one rule" sections of CLAUDE.md **and** AGENTS.md (currently drifted duplicates — reconcile or retire one); freeze every contract shape above (run-lifecycle vocabulary, Story DNA field list, color-lane resolution, `character_locations` GiST-key decision — all lane-bound or sibling-shared, none may drift to a later wave) | **Must land first and alone.** Every agent session loads CLAUDE.md and is currently instructed to refuse generation work; parallel branches opened before this merge will fight the pivot. |
+| G0-PIVOT | Pivot doc, doctrine flip, contracts | `docs/generation-pivot.md` (the brief's 13 sections: inventory, unchanged/extended components, superseded decisions, target architecture, data-model changes, UI architecture, skill architecture, migration risks, privacy/rights, roadmap, slice non-goals, open decisions); **inline the ARCHITECTURE_PLAN.md Phase F branch design into the pivot doc** (branches, revisions, branch-local replacement rows — ARCHITECTURE_PLAN.md is gitignored, so worktree sessions can't read it); new ADRs — D12 generation-first (supersedes D1), D13 multi-provider model layer, D14 branch model, D15 proposal lifecycle & locked-vs-sealed-vs-canonized; rewrite the "one rule" sections of CLAUDE.md **and** AGENTS.md (currently drifted duplicates — reconcile or retire one); freeze every contract shape above — the nine G0 decisions are **already ratified** (see "G0 decisions — RATIFIED 2026-07-27" below): transcribe them into §13 verbatim and spell out the remaining shapes they parameterize (Story DNA field list, skill definition, StoryContextBundle, acceptance API) | **Must land first and alone.** Every agent session loads CLAUDE.md and is currently instructed to refuse generation work; parallel branches opened before this merge will fight the pivot. |
 | G0-CI | Test safety net | GitHub workflow running pytest (suite is ~3s, fully offline) + the eval gate; fix the two billing tests that are **already failing on main** (fixed `NOW=2026-07-03` seeds vs real clock — detonated 2026-07-15; "main is always green" is false today, and every pivot branch will see these failures as noise until this lands); convert DB-gated early-return skips to real `pytest.skip` | Code-only, disjoint from G0-PIVOT — runs in parallel with it. Today the **only** CI is the rights guard; the pivot's parallel branches need an automated merge gate before they exist. |
 
 ### Wave G1 — foundations (all five in parallel after G0)
 
 | ID | Workstream | Scope | Depends on |
 |---|---|---|---|
-| G1-SCHEMA | Generation DDL | One migration (or tight queued sequence): `branches`, `snapshots`, **branch-scoped story-artifact/document-version storage** (the Phase F replacement-row design — accepted text must live somewhere, and it is DDL, so it lands here, not in G2), `generation_runs` + `generation_candidates` + `generation_run_events` (pipeline_runs shape — heartbeat, jsonb payload, append-only ledger, member-read RLS, service-role writes — with the status/phase/event CHECKs implementing the **G0-frozen run lifecycle, cancelled state included**), **generation change sets** + acceptance/rejection events, `locked_elements` (world_rules shape), prompt-version + provider-provenance columns, Story DNA storage, the branch dimension per D14, the `character_locations` GiST-key outcome from G0 (branch_id in the key, or a write-guard), and the `proposed` assertion status **with an audit of every status filter** — ground truth is `grep -rn "retconned"` across `*.py`/`*.sql`, not this list, but at minimum: checks.sql ×7, holes.sql ×4, report.py, ripple.py, rules.py `_MUTED`, canon/ask.py **and** ask/engine.py `_STATUS_EXCLUDE`, ui/db.py, **canon/export/bible.py:102** (a leaked `proposed` row ships AI text in the paid bible), bench/failure_modes.py, tests/test_ask.py; registries (`full_export.py`, `trust_delete.py` — test-enforced), RLS resolvers, db/schema.sql regeneration (also fix its stale "Derived from" header); **the migration ships with tests** (fresh-apply + RLS resolver coverage) and is reversible where practical | G0 decisions (D14/D15, lifecycle, GiST key). **Takes the migration lane for the whole wave.** Enum `ADD VALUE` is irreversible — names are decided in G0, not here. |
+| G1-SCHEMA | Generation DDL | One migration (or tight queued sequence): `branches`, `snapshots`, **branch-scoped story-artifact/document-version storage** (the Phase F replacement-row design — accepted text must live somewhere, and it is DDL, so it lands here, not in G2), `generation_runs` + `generation_candidates` + `generation_run_events` (pipeline_runs shape — heartbeat, jsonb payload, append-only ledger, member-read RLS, service-role writes — with the status/phase/event CHECKs implementing the **G0-frozen run lifecycle, cancelled state included**), **generation change sets** + acceptance/rejection events, `locked_elements` (world_rules shape), prompt-version + provider-provenance columns, Story DNA storage, the branch dimension per D14, the ratified `character_locations` change (branch_id joins the GiST key; constraint drop/re-add + main-branch backfill — G0 decision 5), and the `proposed` assertion status **with an audit of every status filter** — ground truth is `grep -rn "retconned"` across `*.py`/`*.sql`, not this list, but at minimum: checks.sql ×7, holes.sql ×4, report.py, ripple.py, rules.py `_MUTED`, canon/ask.py **and** ask/engine.py `_STATUS_EXCLUDE`, ui/db.py, **canon/export/bible.py:102** (a leaked `proposed` row ships AI text in the paid bible), bench/failure_modes.py, tests/test_ask.py; registries (`full_export.py`, `trust_delete.py` — test-enforced), RLS resolvers, db/schema.sql regeneration (also fix its stale "Derived from" header); **the migration ships with tests** (fresh-apply + RLS resolver coverage) and is reversible where practical | G0 decisions (D14/D15, lifecycle, GiST key). **Takes the migration lane for the whole wave.** Enum `ADD VALUE` is irreversible — names are decided in G0, not here. |
 | G1-PROVIDER | Multi-provider layer | New `generation/providers/`: base protocol + normalized events; **deterministic fake provider first** (CI never needs keys); Anthropic + OpenAI adapters; streaming, **structured outputs**, cancellation, token/cost reporting, **prompt caching (adapter side — the compiler's stable-prefix ordering is the other half)**, timeouts, retries, provider-error normalization; extend `ops/metering.py` PRICING + usage normalization for OpenAI models (today unknown models meter $0 as `:unpriced` — a silent COGS hole); model profiles (fast/best/explore/critic/structured) via env/DB config, no model IDs in domain logic; API keys server-side only; document each provider's real data-retention posture (no unsupported "zero retention" claims) | G0 protocol contract. Pure new code — no migrations, no edits to the existing pipeline's call sites. |
 | G1-SKILLS | Skill framework + slice skills | Versioned skill registry per the G0 contract; the four slice skills — `continue_scene`, `generate_alternate_continuations` (**with the optional variation-dimension control: plot / character choice / reveal / tone / conflict / cliffhanger / surprise / production cost**), `generate_scene_from_beats`, `rewrite_selection`; prompt templates + structured-output schemas + validation rules; format profiles (tv/film/microdrama); Story DNA object + a seeded default for greyharbor; craft-attribute style controls (no named-author imitation) | G0 contracts; rebases onto G1-PROVIDER's fake provider as soon as it merges (build against the protocol until then). |
 | G1-CONTEXT | Context compiler | Provider-neutral pure function over `canon/report.load_world_snapshot` + a story-position/branch filter: selected artifact, Story DNA, locked elements, relevant characters/relationships/threads/assertions, **character knowledge as-of the selected position**, adjacent scenes, **parent plan / child beats for the selected artifact** (generate_scene_from_beats needs it), format profile, user instruction, explicit controls → `StoryContextBundle` + manifest counts; token budgeting (never the full corpus); stable-prefix ordering so provider prompt caching works. Ready-made ingredients: `ripple.ASSERTION_SELECT`, `extract.build_synopsis`, bible per-entity dossiers, `load_scene_open_questions` | G0 contract. No DDL; builds against fixture DB. Branch filter activates when G1-SCHEMA merges. |
@@ -288,34 +288,52 @@ multiplayer · billing changes · enterprise tenancy · FDX editing · mobile ·
 named-author style imitation · prompt marketplace · multi-agent writers' room · automatic
 global propagation · automatic promotion of AI output into canon.
 
-### Open decisions (owner sign-off in G0)
+### G0 decisions — RATIFIED 2026-07-27 (owner sign-off)
 
-Every one of these is lane-bound or sibling-shared, so **none may stay open past the
-G0-PIVOT merge**; outcomes are recorded in docs/generation-pivot.md §13.
+All nine formerly-open decisions were ruled on by the owner on 2026-07-27. G0-PIVOT
+transcribes them into docs/generation-pivot.md §13; no re-litigation without a new ADR.
 
-- **Branch representation:** `branch_id` + branch-local replacement rows (the Phase F
-  design, inlined into the pivot doc — recommended) vs branch-as-world-clone (breaks
-  membership/sharing, duplicates entities, multiplies owner rows).
-- **Proposal status:** new `proposed` enum value (recommended — keeps the confirm queue,
-  which lists every `draft` row, uncontaminated) vs reusing `draft`.
-- **Streaming transport:** generation ledger + short poll with batched `text_delta`
-  events, ~250–500 ms cadence (recommended — proven pattern, replay for free) vs the
-  repo's first SSE.
-- **Generation-run lifecycle vocabulary** — statuses (incl. `cancelled`), phases, event
-  kinds, poll shape: frozen here because G1-SCHEMA casts it as CHECK-constraint DDL two
-  waves before G3-GENSERVICE ships the service.
-- **character_locations exclusion constraint under branches** — add branch_id to the GiST
-  key, or hard-fail cross-branch writes into the canonical world. DDL-shaped, so the
-  outcome lands inside G1-SCHEMA's migration.
-- **Semantic color lanes** — resolve the collisions: non-photo blue is today's
-  note-severity pencil, wax brown (#5C4632) is today's sealed/STET; proposal and
-  locked/pinned/STET lanes need either fresh tokens or an explicit DESIGN.md
-  redefinition (graphite = advisory/metadata ratifies now, not with optional
-  G4-ADVISORY).
-- **Rights-guard policy for AI-generated screenplay text** (RULE 3's slugline heuristic
-  cannot distinguish generated from pasted third-party text; committed fixtures for the
-  fake provider must live under `fixtures/` with the credit line or stay in `out/`).
-- **Fate of the no-LLM grep tests** (recommended: keep both; generation code simply never
-  lives in those paths).
-- **ToS §4 rewrite** ("Canon produces no literary material") — legal review; blocks
-  launch, not the build.
+1. **Branch representation: `branch_id` + branch-local replacement rows.** No world
+   clones. *Implementation notes:* branches inherit world RLS (canon_has_role via
+   world_id — no new access resolvers needed); `scenes unique(work_id, story_position)`
+   must widen to include the branch dimension (or shadow via replacement-row semantics)
+   in the same migration.
+2. **Proposal status: new `proposed` enum value.** `draft` is not reused — the confirm
+   queue lists every `draft` row and stays uncontaminated. Enum `ADD VALUE` is
+   irreversible; the G1-SCHEMA status-filter audit (grep ground truth) is mandatory.
+3. **Streaming transport: `generation_run_events` ledger + short poll**, batched
+   `text_delta` events every ~250–500 ms per candidate. No SSE in the slice. (Worst-case
+   row volume ≈ 700–800 rows per 3-candidate run — fine for an append-only ledger, and
+   reload-replay comes free.)
+4. **Generation-run lifecycle:** statuses `queued | running | succeeded | failed |
+   cancelled`; phases `queued | context_compiling | provider_streaming |
+   candidate_validating | story_tests | persisting | completed`; event kinds = the nine
+   registry provider events + `cancel_requested` + `cancelled`. *Notes:* naming
+   deliberately diverges from pipeline_runs (`done`/`aborted`) — separate table,
+   separate contract, and the theater contract stays frozen; mid-run cost-cap aborts
+   map to `generation_failed` with a `cost_cap` error class, not a new event kind.
+5. **`character_locations` under branches: `branch_id` joins the GiST exclusion key**
+   (`branch_id with =, character_id with =, valid_during with &&`). Non-main writes are
+   not hard-failed. *Implementation notes:* drop/re-add of the existing constraint +
+   main-branch backfill of a `NOT NULL branch_id`, all inside G1-SCHEMA's migration;
+   `canon/store.py`'s exclusion-conflict skip logic references this constraint and must
+   track the change.
+6. **Semantic color lanes: fresh tokens, no redefinition.** Proposal blue `#2F6F9F`
+   (streamed/unaccepted AI text); locked/pinned umber `#6B5338`; graphite remains
+   neutral metadata/advisory; existing note `#41708F` and sealed/STET `#5C4632` keep
+   their meanings untouched. *Note for the G1-RECONCILE design pass:* umber (#6B5338)
+   and STET wax (#5C4632) are perceptually close — different contexts (pinned chips vs
+   seal stamps), but verify distinguishability + contrast when DESIGN.md is updated, and
+   extend `test_design_system.py` selector rules for both new tokens.
+7. **Rights guard: preserved unchanged.** Generated screenplay-like runtime output stays
+   in gitignored `out/`, unless it is an original fixture under `fixtures/` carrying the
+   "Credit: Original fixture material" line. *Trap to engineer around:* RULE 3 also
+   fires on ≥3 column-0 sluglines inside committed `tests/*.py` string literals — fake
+   provider fixtures must indent, stay under threshold, or live under `fixtures/`.
+8. **No-LLM grep tests: both kept.** Generation code never lives under `canon/export/`
+   or the rules paths (`canon/rules*.py`, `canon/rules_store.py`, `ui/rules_ui.py`). The
+   deterministic Fountain writer may live in `canon/export/` because it is LLM-free.
+9. **ToS §4** ("Canon produces no literary material"): **legal-review launch blocker,
+   not a build blocker.** G0 records that it must change; nobody edits terms copy until
+   the legal pass — and then only atomically with tests/test_trust.py:648, via
+   G1-RECONCILE or the legal track.
